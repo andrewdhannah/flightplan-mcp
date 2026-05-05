@@ -1,0 +1,17 @@
+# .nvmrc — Node version pin for Flightplan
+#
+# Tells nvm which Node version to use for this project.
+# Developers with nvm installed run: nvm use
+# nvm will automatically switch to Node 20 LTS.
+#
+# Why Node 20:
+#   better-sqlite3 and sqlite-vec publish pre-built binaries for Node 18–22.
+#   Node 23+ requires compiling from source, which hits C++20 toolchain
+#   requirements that are not reliably present on all developer machines.
+#   Node 20 is the current LTS (Long Term Support) release — stable,
+#   well-supported, and what production deployments use.
+#
+# If you see "zsh: command not found: nvm", install nvm first:
+#   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+#   Then close and reopen Terminal, then run: nvm use
+20

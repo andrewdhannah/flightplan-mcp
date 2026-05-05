@@ -1,0 +1,60 @@
+{
+  "name": "flightplan-mcp",
+  "version": "0.1.0",
+  "description": "Token runway awareness for AI coding sessions. A goose knows how far it can fly. 🪿",
+  "author": "Andrew",
+  "license": "MIT",
+
+  "type": "module",
+
+  "bin": {
+    "flightplan-mcp": "./dist/index.js",
+    "flightplan": "./dist/status.js"
+  },
+
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+
+  "scripts": {
+    "build":  "tsc",
+    "smoke":  "node scripts/smoke-test.js",
+    "dev":    "tsc --watch",
+    "start":  "node dist/index.js",
+    "init":   "node dist/cli.js"
+  },
+
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.0",
+    "zod": "^3.23.0",
+    "better-sqlite3": "^9.4.3",
+    "sqlite-vec": "^0.1.6"
+  },
+
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+
+  "keywords": [
+    "mcp",
+    "claude-code",
+    "token-tracking",
+    "ai-tools",
+    "runway",
+    "context-window"
+  ],
+
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/flightplan-mcp.git"
+  },
+
+  "engines": {
+    "node": ">=18.0.0 <23.0.0",
+
+    "_note": "Why <23.0.0: better-sqlite3 and sqlite-vec publish pre-built binaries for Node 18-22 only. Node 23+ requires compiling native modules from source, which fails without specific C++20 toolchain setup. This engine range is enforced at install time (npm warns) and at runtime (src/index.ts hard-exits with a clear message). See .nvmrc for the recommended version (Node 20 LTS)."
+  }
+}
