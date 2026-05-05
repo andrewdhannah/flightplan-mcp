@@ -3,7 +3,7 @@
 
     /* ── Output ── */
     "outDir": "./dist",        // compiled .js files land here
-    "rootDir": "./src",        // TypeScript source lives here
+    "rootDir": "./src",        // TypeScript source lives under src/
 
     /* ── Module system ── */
     "module": "NodeNext",      // ESM with Node resolution rules
@@ -26,5 +26,5 @@
   },
 
   "include": ["src/**/*"],     // compile everything under src/
-  "exclude": ["node_modules", "dist", "scripts"]  // skip these folders
+  "exclude": ["node_modules", "dist", "scripts", "tests"]
 }

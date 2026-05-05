@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * src/status.ts — flightplan status CLI
  *

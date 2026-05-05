@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * src/cli.ts — flightplan-mcp init
  *

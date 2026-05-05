@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Node version guard — runs before anything else.
  *
