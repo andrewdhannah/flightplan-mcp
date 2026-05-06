@@ -17,11 +17,19 @@ coverage/
 .env
 .env.local
 
+
 # OS noise
 .DS_Store
 Thumbs.db
 
-# Editor
+# Editor or Claude Code Worktrees
 .vscode/
 .idea/
 *.swp
+.claude/
+
+# Handoffs
+SESSION_HANDOFF_*.md
+
+
+
