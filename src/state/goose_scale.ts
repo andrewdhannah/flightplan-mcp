@@ -75,17 +75,32 @@ export const GOOSE_LEVELS = [
 
 /**
  * The union type of all valid Goose Scale values.
- * Use this as the type for any variable that holds a level.
  *
- * Example: const level: GooseLevel = 'CRUISING';  ✓
- *          const level: GooseLevel = 'FLYING';     ✗ (compile error)
+ * Derived from GOOSE_LEVELS so the type and the constant can never
+ * diverge — adding a level to the array automatically widens this union.
+ *
+ * Use this as the type for any variable, parameter, or field that holds
+ * a Goose Scale level. TypeScript will catch any string that isn't one
+ * of the eight defined values at compile time.
+ *
+ * @example
+ * const level: GooseLevel = 'CRUISING';  // ✓
+ * const level: GooseLevel = 'FLYING';    // ✗ compile error
+ *
+ * @see GOOSE_LEVELS for the full ordered array
+ * @see calculateGooseLevel for the function that produces active-session values
  */
 export type GooseLevel = typeof GOOSE_LEVELS[number];
 
 /**
- * Human-readable descriptions for each level.
- * Used in status output and future HONK note generation.
- * Not used in Phase 1 DB schema — stored as the string key only.
+ * Human-readable descriptions for each Goose Scale level.
+ *
+ * Used in status output (get_runway response) and future HONK note
+ * generation (Phase 3). Not persisted to the database — sessions store
+ * only the level string key; descriptions are resolved at read time.
+ *
+ * Keyed by GooseLevel so TypeScript enforces exhaustiveness: every level
+ * must have an entry or the compiler will flag the gap.
  */
 export const GOOSE_LEVEL_DESCRIPTIONS: Record<GooseLevel, string> = {
   PREFLIGHT:   'No session data yet — observation mode active.',
@@ -157,10 +172,19 @@ export function getSessionBaseline(db: Database): number {
 
 /**
  * Reads the warning threshold from config.
- * Returns 0 if warnings are disabled, DEFAULT_WARN_THRESHOLD if not set.
+ *
+ * The warn_threshold is the percentage of runway remaining at which
+ * get_runway() should start flagging the HONK level proactively.
+ * A value of 0 means the user has disabled early warnings; they will
+ * still see HONK when the level is calculated, but no pre-emptive alerts.
+ *
+ * Falls back to DEFAULT_WARN_THRESHOLD when the key is absent (init not
+ * yet run) or corrupt (non-numeric, negative).
  *
  * @param db - An open better-sqlite3 Database instance
- * @returns Threshold as a percentage integer (0 = disabled)
+ * @returns Warning threshold as a percentage integer (0–99).
+ *   0 means warnings are disabled.
+ *   DEFAULT_WARN_THRESHOLD is returned when config is absent or invalid.
  */
 export function getWarnThreshold(db: Database): number {
   const row = db.prepare(
@@ -172,15 +196,23 @@ export function getWarnThreshold(db: Database): number {
   const parsed = parseInt(row.value, 10);
   if (isNaN(parsed) || parsed < 0) return DEFAULT_WARN_THRESHOLD;
 
-  return Math.min(parsed, 99); // 100% warning is meaningless
+  // Cap at 99 — a 100% threshold fires only when the runway is already gone,
+  // which makes it indistinguishable from HONK itself and gives no lead time.
+  return Math.min(parsed, 99);
 }
 
 /**
  * Reads the provider name from config for display purposes.
- * Returns 'unknown' if init hasn't been run.
+ *
+ * The provider name is set at init time (e.g. "Claude Code", "Cursor") and
+ * is included in get_runway() responses so the agent knows which tool's
+ * session window is being tracked. It has no effect on calculations.
+ *
+ * Returns 'unknown' if init hasn't been run yet.
  *
  * @param db - An open better-sqlite3 Database instance
- * @returns Human-readable provider name (e.g. "Claude Code")
+ * @returns Human-readable provider name string (e.g. "Claude Code"),
+ *   or 'unknown' when the config key is absent
  */
 export function getProviderName(db: Database): string {
   const row = db.prepare(
@@ -249,26 +281,35 @@ export function calculateGooseLevel(
   // No active session = PREFLIGHT (waiting for first session_start call).
   if (!sessionActive) return 'PREFLIGHT';
 
-  // Guard: avoid divide-by-zero if baseline is somehow 0.
+  // Guard: avoid divide-by-zero if baseline is somehow 0 or negative.
+  // Returning PREFLIGHT rather than crashing keeps get_runway() safe
+  // even with a corrupt config value.
   if (baseline <= 0) return 'PREFLIGHT';
 
   const pctConsumed = tokensObserved / baseline;
 
-  if (pctConsumed >= 0.85) return 'HONK';
-  if (pctConsumed >= 0.75) return 'TURBULENCE';
-  if (pctConsumed >= 0.50) return 'HEADWIND';
-  return 'CRUISING';
+  if (pctConsumed >= 0.85) return 'HONK';        // 85%+ consumed — wrap up now
+  if (pctConsumed >= 0.75) return 'TURBULENCE';   // 75–85% — getting tight
+  if (pctConsumed >= 0.50) return 'HEADWIND';     // 50–75% — burning faster than nominal
+  return 'CRUISING';                              // 0–50%  — plenty of runway
 }
 
 /**
- * Returns a runway percentage (0–100) representing how much is left.
- * Clamped to 0 — never returns negative even if tokens exceed baseline.
+ * Returns a runway percentage (0–100) representing how much token budget remains.
  *
- * @param tokensObserved - Tokens reported so far
- * @param baseline - Session token baseline
- * @returns Percentage remaining as an integer (0–100)
+ * Used in get_runway() responses to give the agent a concrete sense of progress
+ * without exposing raw token counts. The value is always a non-negative integer;
+ * it never goes below 0 even when tokens observed exceed the baseline (which can
+ * happen if the agent is on a larger plan than the configured baseline assumes).
+ *
+ * @param tokensObserved - Tokens reported so far in the current session
+ * @param baseline - Session token baseline (from getSessionBaseline)
+ * @returns Percentage of runway remaining as an integer in [0, 100].
+ *   Returns 100 when baseline is 0 or negative (treated as "no data, assume full").
  */
 export function getRunwayPercent(tokensObserved: number, baseline: number): number {
+  // No valid baseline means we can't calculate consumption — report full runway
+  // rather than returning a misleadingly low number or crashing.
   if (baseline <= 0) return 100;
   const remaining = 1 - (tokensObserved / baseline);
   return Math.max(0, Math.round(remaining * 100));
