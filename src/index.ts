@@ -20,20 +20,48 @@
 // Split "20.11.0" → ["20","11","0"] → [20,11,0] → take first element.
 // The ?? 0 handles the theoretical case where split returns empty —
 // 0 will always fail the version check and show the user a clear error.
-const nodeMajor = process.versions.node.split('.').map(Number)[0] ?? 0;
+const nodeMajor = process.versions.node.split(".").map(Number)[0] ?? 0;
 if (nodeMajor < 18 || nodeMajor > 22) {
   console.error(
     `\n🪿 Flightplan requires Node 18–22 (you are running Node ${process.versions.node}).\n` +
-    `\n` +
-    `   Fix:\n` +
-    `     nvm use 20        (if you have nvm installed)\n` +
-    `     nvm install 20    (if Node 20 is not installed yet)\n` +
-    `\n` +
-    `   Don't have nvm? Install it:\n` +
-    `     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n` +
-    `   Then close and reopen Terminal, and run: nvm use\n`
+      `\n` +
+      `   Fix:\n` +
+      `     nvm use 20        (if you have nvm installed)\n` +
+      `     nvm install 20    (if Node 20 is not installed yet)\n` +
+      `\n` +
+      `   Don't have nvm? Install it:\n` +
+      `     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash\n` +
+      `   Then close and reopen Terminal, and run: nvm use\n`,
   );
   process.exit(1);
+}
+
+// ─── Subcommand Router ────────────────────────────────────────────────────────
+//
+// Routes `npx flightplan-mcp init` to the setup wizard.
+//
+// Without this: the MCP server starts and silently waits for JSON-RPC input
+// on stdin — the terminal appears to hang.
+//
+// process.argv = ["node", "/path/to/index.js", "init"]
+// [2] is the first user-supplied argument.
+//
+// import('./cli.js') loads cli.ts only when needed — keeps the MCP server
+// path lean. .then() used instead of await because this file has no
+// top-level async wrapper.
+// ─────────────────────────────────────────────────────────────────────────────
+
+if (process.argv[2] === "init") {
+  import("./cli.js")
+    .then(({ initCommand }) => initCommand())
+    .then(() => process.exit(0))
+    .catch((err: unknown) => {
+      console.error(
+        "[flightplan] Init failed:",
+        err instanceof Error ? err.message : err,
+      );
+      process.exit(1);
+    });
 }
 
 /**
@@ -59,12 +87,12 @@ if (nodeMajor < 18 || nodeMajor > 22) {
  *   No port, no HTTP — the agent manages the process lifecycle.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
-import { getRunway } from './tools/get_runway.js';
-import { sessionStart } from './tools/session_start.js';
-import { recordSession } from './tools/record_session.js';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import { getRunway } from "./tools/get_runway.js";
+import { sessionStart } from "./tools/session_start.js";
+import { recordSession } from "./tools/record_session.js";
 
 // ─── Server definition ────────────────────────────────────────────────────────
 
@@ -74,8 +102,8 @@ import { recordSession } from './tools/record_session.js';
  * Keep the name stable — changing it breaks existing agent configs.
  */
 const server = new McpServer({
-  name: 'flightplan',
-  version: '0.1.0',
+  name: "flightplan",
+  version: "0.1.0",
 });
 
 // ─── Tool: get_runway ─────────────────────────────────────────────────────────
@@ -97,12 +125,12 @@ const server = new McpServer({
  *   Returns text/plain so the agent can read it directly.
  */
 server.tool(
-  'get_runway',
+  "get_runway",
 
   // Description the agent uses to decide when to call this tool.
-  'Check your current token runway before high-cost operations. ' +
-  'Returns the Goose Scale level, remaining tokens, and a recommended action. ' +
-  'Call this at session start and before any large code generation, analysis, or refactoring task.',
+  "Check your current token runway before high-cost operations. " +
+    "Returns the Goose Scale level, remaining tokens, and a recommended action. " +
+    "Call this at session start and before any large code generation, analysis, or refactoring task.",
 
   // Input schema — no parameters needed.
   {},
@@ -114,14 +142,14 @@ server.tool(
     return {
       content: [
         {
-          type: 'text' as const,
+          type: "text" as const,
           // Serialize the full RunwayResponse as formatted JSON.
           // The agent can parse this or read it as text — both work.
           text: JSON.stringify(result, null, 2),
         },
       ],
     };
-  }
+  },
 );
 
 // ─── Tool: session_start ─────────────────────────────────────────────────────
@@ -136,32 +164,45 @@ server.tool(
  *   project_id — optional, tag for grouping sessions
  */
 server.tool(
-  'session_start',
+  "session_start",
 
-  'Start a new Flightplan tracking session. ' +
-  'Call this at the beginning of each working session before doing any work. ' +
-  'Returns a session_id you will need when calling record_session() at the end.',
+  "Start a new Flightplan tracking session. " +
+    "Call this at the beginning of each working session before doing any work. " +
+    "Returns a session_id you will need when calling record_session() at the end.",
 
   // Input schema — all fields optional.
   // Zod is what the MCP SDK uses internally for parameter validation.
   // z.string().optional() means: accept a string if present, undefined if not.
   {
-    provider:   z.string().optional().describe('AI tool name (e.g. "claude-code")'),
-    model:      z.string().optional().describe('Model name if known (e.g. "claude-sonnet-4-6")'),
-    project_id: z.string().optional().describe('Optional project tag for grouping sessions'),
+    provider: z
+      .string()
+      .optional()
+      .describe('AI tool name (e.g. "claude-code")'),
+    model: z
+      .string()
+      .optional()
+      .describe('Model name if known (e.g. "claude-sonnet-4-6")'),
+    project_id: z
+      .string()
+      .optional()
+      .describe("Optional project tag for grouping sessions"),
   },
 
   async (params) => {
     const result = sessionStart({
-      provider:   typeof params.provider   === 'string' ? params.provider   : undefined,
-      model:      typeof params.model      === 'string' ? params.model      : undefined,
-      project_id: typeof params.project_id === 'string' ? params.project_id : undefined,
+      provider:
+        typeof params.provider === "string" ? params.provider : undefined,
+      model: typeof params.model === "string" ? params.model : undefined,
+      project_id:
+        typeof params.project_id === "string" ? params.project_id : undefined,
     });
 
     return {
-      content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+      content: [
+        { type: "text" as const, text: JSON.stringify(result, null, 2) },
+      ],
     };
-  }
+  },
 );
 
 // ─── Tool: record_session ─────────────────────────────────────────────────────
@@ -175,18 +216,20 @@ server.tool(
  *   notes        — optional freeform notes about the session.
  */
 server.tool(
-  'record_session',
+  "record_session",
 
-  'End the current Flightplan tracking session and record your token usage. ' +
-  'Call this when you are done working for the session. ' +
-  'Provide tokens_total — your final token count from this session. ' +
-  'This data improves your baseline estimate over time.',
+  "End the current Flightplan tracking session and record your token usage. " +
+    "Call this when you are done working for the session. " +
+    "Provide tokens_total — your final token count from this session. " +
+    "This data improves your baseline estimate over time.",
 
   // Input schema — tokens_total required, notes optional.
   // z.number() = required number. z.string().optional() = optional string.
   {
-    tokens_total: z.number().describe('Total tokens used in this session (required)'),
-    notes:        z.string().optional().describe('Optional notes about this session'),
+    tokens_total: z
+      .number()
+      .describe("Total tokens used in this session (required)"),
+    notes: z.string().optional().describe("Optional notes about this session"),
   },
 
   async (params) => {
@@ -194,13 +237,15 @@ server.tool(
     // schema above — no manual typeof check needed here.
     const result = recordSession({
       tokens_total: params.tokens_total,
-      notes: typeof params.notes === 'string' ? params.notes : undefined,
+      notes: typeof params.notes === "string" ? params.notes : undefined,
     });
 
     return {
-      content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+      content: [
+        { type: "text" as const, text: JSON.stringify(result, null, 2) },
+      ],
     };
-  }
+  },
 );
 
 // ─── Start server ─────────────────────────────────────────────────────────────
@@ -218,6 +263,6 @@ server.tool(
 const transport = new StdioServerTransport();
 
 server.connect(transport).catch((err) => {
-  console.error('[flightplan] Fatal: MCP server failed to start:', err);
+  console.error("[flightplan] Fatal: MCP server failed to start:", err);
   process.exit(1);
 });
