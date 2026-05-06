@@ -30,9 +30,9 @@
  *   flightplan export command writes RUNWAY_STATE.md via generateMarkdown().
  */
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { openDb } from './db/connection.js';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { openDb } from "./db/connection.js";
 import {
   getSessionBaseline,
   getWarnThreshold,
@@ -41,8 +41,8 @@ import {
   getRunwayPercent,
   GOOSE_LEVEL_DESCRIPTIONS,
   type GooseLevel,
-} from './state/goose_scale.js';
-import { generateMarkdown } from './state/state_generator.js';
+} from "./state/goose_scale.js";
+import { generateMarkdown } from "./state/state_generator.js";
 
 // ─── ANSI colour helpers ──────────────────────────────────────────────────────
 
@@ -57,15 +57,15 @@ import { generateMarkdown } from './state/state_generator.js';
 const isTTY = process.stdout.isTTY;
 
 const c = {
-  reset:  (s: string) => isTTY ? `\x1b[0m${s}\x1b[0m`  : s,
-  bold:   (s: string) => isTTY ? `\x1b[1m${s}\x1b[0m`  : s,
-  dim:    (s: string) => isTTY ? `\x1b[2m${s}\x1b[0m`  : s,
-  green:  (s: string) => isTTY ? `\x1b[32m${s}\x1b[0m` : s,
-  yellow: (s: string) => isTTY ? `\x1b[33m${s}\x1b[0m` : s,
-  orange: (s: string) => isTTY ? `\x1b[38;5;208m${s}\x1b[0m` : s,
-  red:    (s: string) => isTTY ? `\x1b[31m${s}\x1b[0m` : s,
-  blue:   (s: string) => isTTY ? `\x1b[34m${s}\x1b[0m` : s,
-  cyan:   (s: string) => isTTY ? `\x1b[36m${s}\x1b[0m` : s,
+  reset: (s: string) => (isTTY ? `\x1b[0m${s}\x1b[0m` : s),
+  bold: (s: string) => (isTTY ? `\x1b[1m${s}\x1b[0m` : s),
+  dim: (s: string) => (isTTY ? `\x1b[2m${s}\x1b[0m` : s),
+  green: (s: string) => (isTTY ? `\x1b[32m${s}\x1b[0m` : s),
+  yellow: (s: string) => (isTTY ? `\x1b[33m${s}\x1b[0m` : s),
+  orange: (s: string) => (isTTY ? `\x1b[38;5;208m${s}\x1b[0m` : s),
+  red: (s: string) => (isTTY ? `\x1b[31m${s}\x1b[0m` : s),
+  blue: (s: string) => (isTTY ? `\x1b[34m${s}\x1b[0m` : s),
+  cyan: (s: string) => (isTTY ? `\x1b[36m${s}\x1b[0m` : s),
 };
 
 // ─── Level colours ────────────────────────────────────────────────────────────
@@ -77,15 +77,24 @@ const c = {
  */
 function levelColour(level: string, text: string): string {
   switch (level) {
-    case 'PREFLIGHT':  return c.blue(text);
-    case 'CRUISING':   return c.green(text);
-    case 'HEADWIND':   return c.yellow(text);
-    case 'TURBULENCE': return c.orange(text);
-    case 'HONK':       return c.red(text);
-    case 'LANDING':    return c.dim(text);
-    case 'REFUELLED':  return c.green(text);
-    case 'WAYWARD':    return c.cyan(text);
-    default:           return text;
+    case "PREFLIGHT":
+      return c.blue(text);
+    case "CRUISING":
+      return c.green(text);
+    case "HEADWIND":
+      return c.yellow(text);
+    case "TURBULENCE":
+      return c.orange(text);
+    case "HONK":
+      return c.red(text);
+    case "LANDING":
+      return c.dim(text);
+    case "REFUELLED":
+      return c.green(text);
+    case "WAYWARD":
+      return c.cyan(text);
+    default:
+      return text;
   }
 }
 
@@ -105,9 +114,9 @@ function levelColour(level: string, text: string): string {
  * @param width - total bar width in characters (default 24)
  */
 function renderBar(pctRemaining: number, level: string, width = 24): string {
-  const filled  = Math.round((1 - pctRemaining / 100) * width);
-  const empty   = width - filled;
-  const bar     = '█'.repeat(filled) + '░'.repeat(empty);
+  const filled = Math.round((1 - pctRemaining / 100) * width);
+  const empty = width - filled;
+  const bar = "█".repeat(filled) + "░".repeat(empty);
   return `[${levelColour(level, bar)}]`;
 }
 
@@ -118,13 +127,13 @@ function renderBar(pctRemaining: number, level: string, width = 24): string {
  * Used by gatherStatusData() and passed into rendering functions.
  */
 interface ActiveSessionRow {
-  session_id:      string | null;
-  started_at:      string | null;
-  goose_level:     string | null;
+  session_id: string | null;
+  started_at: string | null;
+  goose_level: string | null;
   tokens_observed: number;
-  provider:        string | null;
-  model:           string | null;
-  project_id:      string | null;
+  provider: string | null;
+  model: string | null;
+  project_id: string | null;
 }
 
 /**
@@ -139,27 +148,27 @@ interface ActiveSessionRow {
  */
 export interface StatusData {
   /** Current Goose Scale level. */
-  level:             GooseLevel;
+  level: GooseLevel;
   /** Whether a session is currently open. */
-  sessionActive:     boolean;
+  sessionActive: boolean;
   /** Runway remaining as a percentage (0–100). */
-  runwayPct:         number;
+  runwayPct: number;
   /** Runway remaining in tokens. */
-  runwayTokens:      number;
+  runwayTokens: number;
   /** Tokens observed so far in this session. */
-  tokensObserved:    number;
+  tokensObserved: number;
   /** User's session token baseline (from config). */
-  baseline:          number;
+  baseline: number;
   /** Warning threshold percentage (0 = disabled). */
-  warnThreshold:     number;
+  warnThreshold: number;
   /** Human-readable provider name from config. */
-  providerName:      string;
+  providerName: string;
   /** Raw active_session row — null fields mean no session is open. */
-  active:            ActiveSessionRow | undefined;
+  active: ActiveSessionRow | undefined;
   /** Total sessions archived in usage_snapshots. */
-  sessionsArchived:  number;
+  sessionsArchived: number;
   /** Sessions remaining until Phase 2 Dead Reckoning unlocks (0 = active). */
-  phase2Remaining:   number;
+  phase2Remaining: number;
 }
 
 // ─── Data gathering (Tier 2.6) ────────────────────────────────────────────────
@@ -184,32 +193,38 @@ export function gatherStatusData(): StatusData {
   const db = openDb();
 
   // Config reads
-  const baseline      = getSessionBaseline(db);
+  const baseline = getSessionBaseline(db);
   const warnThreshold = getWarnThreshold(db);
-  const providerName  = getProviderName(db);
+  const providerName = getProviderName(db);
 
   // Active session read
-  const active = db.prepare(`
+  const active = db
+    .prepare(
+      `
     SELECT session_id, started_at, goose_level, tokens_observed,
            provider, model, project_id
     FROM active_session
     WHERE id = 'current'
-  `).get() as ActiveSessionRow | undefined;
+  `,
+    )
+    .get() as ActiveSessionRow | undefined;
 
   // Derived values
-  const sessionActive  = !!(active?.session_id);
+  const sessionActive = !!active?.session_id;
   const tokensObserved = active?.tokens_observed ?? 0;
-  const level          = calculateGooseLevel(tokensObserved, baseline, sessionActive);
-  const runwayPct      = sessionActive ? getRunwayPercent(tokensObserved, baseline) : 100;
-  const runwayTokens   = Math.max(0, baseline - tokensObserved);
+  const level = calculateGooseLevel(tokensObserved, baseline, sessionActive);
+  const runwayPct = sessionActive
+    ? getRunwayPercent(tokensObserved, baseline)
+    : 100;
+  const runwayTokens = Math.max(0, baseline - tokensObserved);
 
   // Session archive count
-  const countRow = db.prepare(
-    `SELECT COUNT(*) as n FROM usage_snapshots`
-  ).get() as { n: number };
+  const countRow = db
+    .prepare(`SELECT COUNT(*) as n FROM usage_snapshots`)
+    .get() as { n: number };
 
   const sessionsArchived = countRow.n;
-  const phase2Remaining  = Math.max(0, 5 - sessionsArchived);
+  const phase2Remaining = Math.max(0, 5 - sessionsArchived);
 
   return {
     level,
@@ -242,112 +257,142 @@ export function gatherStatusData(): StatusData {
  * @param data - StatusData from gatherStatusData()
  */
 function printStatus(data: StatusData): void {
-  const { level, sessionActive, runwayPct, runwayTokens, tokensObserved,
-          baseline, warnThreshold, providerName, active,
-          sessionsArchived, phase2Remaining } = data;
+  const {
+    level,
+    sessionActive,
+    runwayPct,
+    runwayTokens,
+    tokensObserved,
+    baseline,
+    warnThreshold,
+    providerName,
+    active,
+    sessionsArchived,
+    phase2Remaining,
+  } = data;
 
   // ── Header ─────────────────────────────────────────────────────────────────
-  console.log('');
+  console.log("");
   console.log(
-    c.bold('🪿 Flightplan') +
-    c.dim('  ·  ') +
-    levelColour(level, c.bold(level)) +
-    c.dim('  ·  ') +
-    c.dim(providerName)
+    c.bold("🪿 Flightplan") +
+      c.dim("  ·  ") +
+      levelColour(level, c.bold(level)) +
+      c.dim("  ·  ") +
+      c.dim(providerName),
   );
-  console.log('');
+  console.log("");
 
   // ── Progress bar ───────────────────────────────────────────────────────────
   if (sessionActive) {
     const bar = renderBar(runwayPct, level);
     console.log(
       `  ${bar}  ` +
-      levelColour(level, c.bold(`${runwayPct}%`)) +
-      c.dim(' remaining')
+        levelColour(level, c.bold(`${runwayPct}%`)) +
+        c.dim(" remaining"),
     );
-    console.log('');
+    console.log("");
   }
 
   // ── Session details ────────────────────────────────────────────────────────
   if (sessionActive) {
-    const startedAt    = active?.started_at ?? '';
-    const durationMs   = startedAt
+    const startedAt = active?.started_at ?? "";
+    const durationMs = startedAt
       ? new Date().getTime() - new Date(startedAt).getTime()
       : 0;
     const durationMins = Math.round(durationMs / 60000);
 
-    console.log(c.dim('  Session'));
+    console.log(c.dim("  Session"));
     console.log(
       `    Tokens observed   ` +
-      c.bold(tokensObserved.toLocaleString()) +
-      c.dim(` / ${baseline.toLocaleString()} baseline`)
+        c.bold(tokensObserved.toLocaleString()) +
+        c.dim(` / ${baseline.toLocaleString()} baseline`),
     );
     console.log(
       `    Runway remaining  ` +
-      levelColour(level, c.bold(runwayTokens.toLocaleString())) +
-      c.dim(' tokens')
+        levelColour(level, c.bold(runwayTokens.toLocaleString())) +
+        c.dim(" tokens"),
     );
-    console.log(
-      `    Duration          ` +
-      c.bold(`${durationMins} min`)
-    );
+    console.log(`    Duration          ` + c.bold(`${durationMins} min`));
     if (active?.model) {
       console.log(`    Model             ${c.dim(active.model)}`);
     }
     if (active?.project_id) {
       console.log(`    Project           ${c.dim(active.project_id)}`);
     }
-    console.log('');
+    console.log("");
 
     // Warning threshold alert
-    if (warnThreshold > 0 && runwayPct <= warnThreshold && level !== 'HONK') {
+    if (warnThreshold > 0 && runwayPct <= warnThreshold && level !== "HONK") {
       console.log(
-        c.yellow(`  ⚠️  Runway at ${runwayPct}% — below your ${warnThreshold}% warning threshold.`)
+        c.yellow(
+          `  ⚠️  Runway at ${runwayPct}% — below your ${warnThreshold}% warning threshold.`,
+        ),
       );
-      console.log('');
+      console.log("");
     }
-
   } else {
-    // No active session
-    console.log(c.dim('  No active session.'));
-    console.log(c.dim('  Run session_start() in your AI tool to begin tracking.'));
-    console.log('');
+    // No active session — but differentiate between brand new and experienced user.
+    // A new install has 0 archived sessions. An experienced user has sessions banked.
+    // Showing the same message for both is confusing — fix that here.
+    if (sessionsArchived === 0) {
+      // Genuinely new — no history at all
+      console.log(c.dim("  No session data yet — observation mode active."));
+      console.log(
+        c.dim("  Run session_start() in your AI tool to begin tracking."),
+      );
+    } else {
+      // Has history — just not currently active
+      console.log(
+        `  ${c.dim(`${sessionsArchived} session${sessionsArchived === 1 ? "" : "s"} archived.`)}` +
+          c.dim("  No session currently active."),
+      );
+      console.log(
+        c.dim("  Run session_start() in your AI tool to begin a new session."),
+      );
+    }
+    console.log("");
     console.log(
       `  Baseline  ` +
-      c.bold(baseline.toLocaleString()) +
-      c.dim(' tokens  (set at init)')
+        c.bold(baseline.toLocaleString()) +
+        c.dim(" tokens  (set at init)"),
     );
-    console.log('');
+    console.log("");
   }
 
   // ── Recommended action ─────────────────────────────────────────────────────
-  const description = GOOSE_LEVEL_DESCRIPTIONS[level] ?? 'Unknown level.';
-  console.log(c.dim('  Status'));
+  // For PREFLIGHT, we build a context-aware message instead of using the
+  // static description — because the static version always says "No session
+  // data yet" even when the user has archived sessions.
+  const description =
+    level === "PREFLIGHT" && sessionsArchived > 0
+      ? `${sessionsArchived} session${sessionsArchived === 1 ? "" : "s"} archived. Call session_start() to begin tracking.`
+      : (GOOSE_LEVEL_DESCRIPTIONS[level] ?? "Unknown level.");
+  console.log(c.dim("  Status"));
   console.log(`    ${levelColour(level, description)}`);
-  console.log('');
+  console.log("");
 
   // ── Dead Reckoning countdown ───────────────────────────────────────────────
-  console.log(c.dim('  Dead Reckoning'));
+  console.log(c.dim("  Dead Reckoning"));
   if (phase2Remaining > 0) {
     console.log(
-      `    ${c.dim(`${sessionsArchived} session${sessionsArchived === 1 ? '' : 's'} archived  ·  `)}` +
-      c.bold(`${phase2Remaining} more`) +
-      c.dim(` until baseline auto-calibrates`)
+      `    ${c.dim(`${sessionsArchived} session${sessionsArchived === 1 ? "" : "s"} archived  ·  `)}` +
+        c.bold(`${phase2Remaining} more`) +
+        c.dim(` until baseline auto-calibrates`),
     );
   } else {
     console.log(
-      `    ${c.green('✓')}  ${c.bold(`${sessionsArchived} sessions`)} archived  ·  ` +
-      c.green('Dead Reckoning active')
+      `    ${c.green("✓")}  ${c.bold(`${sessionsArchived} sessions`)} archived  ·  ` +
+        c.green("Dead Reckoning active"),
     );
   }
-  console.log('');
+  console.log("");
 
   // ── Footer ─────────────────────────────────────────────────────────────────
-  console.log(c.dim('  ─────────────────────────────────────────────'));
-  console.log(c.dim('  flightplan-mcp init   — reconfigure'));
-  console.log(c.dim('  flightplan status     — this screen'));
-  console.log(c.dim('  flightplan export     — write RUNWAY_STATE.md'));
-  console.log('');
+  console.log(c.dim("  ─────────────────────────────────────────────"));
+  console.log(c.dim("  flightplan-mcp init   — reconfigure"));
+  console.log(c.dim("  flightplan status     — this screen"));
+  console.log(c.dim("  flightplan export     — write RUNWAY_STATE.md"));
+  console.log("");
 }
 
 // ─── JSON output ──────────────────────────────────────────────────────────────
@@ -363,23 +408,32 @@ function printStatus(data: StatusData): void {
  * @param data - StatusData from gatherStatusData()
  */
 function printJson(data: StatusData): void {
-  const { level, sessionActive, runwayPct, runwayTokens, tokensObserved,
-          baseline, warnThreshold, providerName, active,
-          sessionsArchived } = data;
+  const {
+    level,
+    sessionActive,
+    runwayPct,
+    runwayTokens,
+    tokensObserved,
+    baseline,
+    warnThreshold,
+    providerName,
+    active,
+    sessionsArchived,
+  } = data;
 
   const output = {
     level,
-    session_active:          sessionActive,
-    window_remaining_pct:    runwayPct,
+    session_active: sessionActive,
+    window_remaining_pct: runwayPct,
     window_remaining_tokens: runwayTokens,
-    tokens_observed:         tokensObserved,
-    baseline_tokens:         baseline,
-    warn_threshold_pct:      warnThreshold,
-    provider:                active?.provider ?? providerName,
-    model:                   active?.model ?? null,
-    project_id:              active?.project_id ?? null,
-    sessions_archived:       sessionsArchived,
-    description:             GOOSE_LEVEL_DESCRIPTIONS[level] ?? '',
+    tokens_observed: tokensObserved,
+    baseline_tokens: baseline,
+    warn_threshold_pct: warnThreshold,
+    provider: active?.provider ?? providerName,
+    model: active?.model ?? null,
+    project_id: active?.project_id ?? null,
+    sessions_archived: sessionsArchived,
+    description: GOOSE_LEVEL_DESCRIPTIONS[level] ?? "",
   };
 
   console.log(JSON.stringify(output, null, 2));
@@ -406,16 +460,20 @@ function printJson(data: StatusData): void {
  */
 function printExport(data: StatusData, outPath: string): void {
   const markdown = generateMarkdown(data);
-  fs.writeFileSync(outPath, markdown, 'utf8');
+  fs.writeFileSync(outPath, markdown, "utf8");
 
-  console.log('');
+  console.log("");
   console.log(`🪿 Flightplan — Export`);
-  console.log('');
+  console.log("");
   console.log(`  ✓  Written to: ${outPath}`);
-  console.log('');
-  console.log(`  Paste or upload this file to any LLM for full runway context.`);
-  console.log(`  Works with ChatGPT, Gemini, Augure, or any model that reads text.`);
-  console.log('');
+  console.log("");
+  console.log(
+    `  Paste or upload this file to any LLM for full runway context.`,
+  );
+  console.log(
+    `  Works with ChatGPT, Gemini, Augure, or any model that reads text.`,
+  );
+  console.log("");
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -433,19 +491,19 @@ function printExport(data: StatusData, outPath: string): void {
  * The DB-not-found error gets a specific "run init" message.
  */
 function main(): void {
-  const args    = process.argv.slice(2);
-  const command = args[0] ?? 'status';   // default to 'status' if no arg given
-  const useJson = args.includes('--json');
+  const args = process.argv.slice(2);
+  const command = args[0] ?? "status"; // default to 'status' if no arg given
+  const useJson = args.includes("--json");
 
   // --out flag: flightplan export --out /some/path/RUNWAY_STATE.md
   // Extract into a named variable first so TypeScript can narrow the type.
   // The ternary condition alone isn't enough — TS still sees string | undefined
   // at the call site even when the condition guards it.
-  const outFlagIndex = args.indexOf('--out');
+  const outFlagIndex = args.indexOf("--out");
   const outFlagValue = outFlagIndex !== -1 ? args[outFlagIndex + 1] : undefined;
   const outPath = outFlagValue
     ? path.resolve(outFlagValue)
-    : path.resolve('RUNWAY_STATE.md');   // default: current working directory
+    : path.resolve("RUNWAY_STATE.md"); // default: current working directory
 
   try {
     // Gather data once — all three output paths consume the same object.
@@ -453,24 +511,23 @@ function main(): void {
     // printStatus() and printJson() separately (Tier 2.6).
     const data = gatherStatusData();
 
-    if (command === 'export') {
+    if (command === "export") {
       printExport(data, outPath);
     } else if (useJson) {
       printJson(data);
     } else {
       printStatus(data);
     }
-
   } catch (err) {
-    if (err instanceof Error && err.message.includes('no such table')) {
+    if (err instanceof Error && err.message.includes("no such table")) {
       console.error(
-        '\n🪿 Flightplan database not found.\n' +
-        '   Run: npx flightplan-mcp init\n'
+        "\n🪿 Flightplan database not found.\n" +
+          "   Run: npx flightplan-mcp init\n",
       );
     } else {
       console.error(
-        '\n🪿 Status check failed:',
-        err instanceof Error ? err.message : err
+        "\n🪿 Status check failed:",
+        err instanceof Error ? err.message : err,
       );
     }
     process.exit(1);
