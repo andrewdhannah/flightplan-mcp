@@ -1,11 +1,26 @@
 # FlightPlan Runway State
-**Generated:** 2026-05-05T06:34:18.385Z
+**Generated:** 2026-05-06T03:54:14.730Z
 **Source:** `flightplan export` (Flightplan v0.1.0)
 **Provider:** Claude Code
 
 > ⚠️ This is a point-in-time snapshot. If significant time has passed since
 > this timestamp, ask the user to run `flightplan export` again for fresh data.
 > Token counts change as the session progresses — treat old snapshots as estimates.
+
+## Agent Contract
+
+*Read this before doing anything else.*
+
+| Level | State | Action |
+| :--- | :--- | :--- |
+| 🔴 HONK | Runway exhausted | **Stop.** Finish current sentence. Call `record_session()`. Nothing new. |
+| 🟠 TURBULENCE | Runway tight | **Do not start large tasks.** Wrap up or checkpoint only. |
+| 🟡 HEADWIND | Burning fast | **Small, scoped tasks only.** Finish what's open before starting new work. |
+| 🟢 CRUISING | Healthy | Proceed. Re-evaluate runway before any major operation. |
+| ⬜ PREFLIGHT | No session | Call `session_start()` before beginning work. |
+
+**Before any major task:** check the Goose Scale level in Section 1.
+**When uncertain:** default to the more conservative behaviour above.
 
 ## 1. High-Level Metadata (The "Compass")
 *Orients the LLM immediately. Read this section first.*
@@ -32,15 +47,15 @@ To begin tracking: call `session_start()` in your AI tool.
 
 ## 3. Dead Reckoning Status
 
-- **Sessions Archived:** 0
-- **Phase 2 Status:** ⏳ Unlocks in 5 more sessions
+- **Sessions Archived:** 1
+- **Phase 2 Status:** ⏳ Unlocks in 4 more sessions
 
 **Currently unavailable (Phase 1 — returns null):**
 - `burn_rate_per_hour` — requires 5+ archived sessions
 - `time_remaining_minutes` — derived from burn rate
 - `token_range` — confidence interval from session variance
 
-These fields activate automatically after 5 more completed sessions.
+These fields activate automatically after 4 more completed sessions.
 
 ## 4. How To Use This File
 
@@ -71,4 +86,8 @@ implementations or ask about them unless the user raises them first:
   opt-in anonymous session sharing.
 - **Flightplan Lite:** Prompt-only version for LLMs without file upload.
 
-*End of FlightPlan Runway State — 2026-05-05T06:34:18.385Z*
+---
+
+> **Snapshot taken at 2026-05-06T03:54:14.730Z.**
+> Re-export before long tasks, refactors, or multi-step operations.
+> Run `flightplan export` to get fresh data.
