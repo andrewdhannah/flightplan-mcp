@@ -92,7 +92,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { getRunway } from "./tools/get_runway.js";
 import { sessionStart } from "./tools/session_start.js";
-import { recordSession } from "./tools/record_session.js";
+import { recordSession, type SessionOutcome } from "./tools/record_session.js";
 
 // ─── Server definition ────────────────────────────────────────────────────────
 
@@ -159,9 +159,13 @@ server.tool(
  * Agent calls this at the beginning of a working session.
  *
  * Parameters:
- *   provider   — optional, which AI tool is running
- *   model      — optional, specific model name
- *   project_id — optional, tag for grouping sessions
+ *   provider        — optional, which AI tool is running
+ *   model           — optional, specific model name
+ *   project_id      — optional, tag for grouping sessions
+ *   plan_id         — optional FP-1: Librarian plan ID (e.g. "Sprint-E")
+ *   work_order_id   — optional FP-1: Librarian Work Order ID (e.g. "A1")
+ *   work_session_id — optional FP-1: Librarian Work Session ID
+ *   agent           — optional FP-1: agent name (e.g. "OpenWork-Claude")
  */
 server.tool(
   "session_start",
@@ -186,6 +190,22 @@ server.tool(
       .string()
       .optional()
       .describe("Optional project tag for grouping sessions"),
+    plan_id: z
+      .string()
+      .optional()
+      .describe('Optional FP-1: Librarian plan ID (e.g. "Sprint-E")'),
+    work_order_id: z
+      .string()
+      .optional()
+      .describe('Optional FP-1: Librarian Work Order ID (e.g. "A1")'),
+    work_session_id: z
+      .string()
+      .optional()
+      .describe("Optional FP-1: Librarian Work Session ID"),
+    agent: z
+      .string()
+      .optional()
+      .describe('Optional FP-1: Agent name (e.g. "OpenWork-Claude")'),
   },
 
   async (params) => {
@@ -195,6 +215,14 @@ server.tool(
       model: typeof params.model === "string" ? params.model : undefined,
       project_id:
         typeof params.project_id === "string" ? params.project_id : undefined,
+      plan_id:
+        typeof params.plan_id === "string" ? params.plan_id : undefined,
+      work_order_id:
+        typeof params.work_order_id === "string" ? params.work_order_id : undefined,
+      work_session_id:
+        typeof params.work_session_id === "string" ? params.work_session_id : undefined,
+      agent:
+        typeof params.agent === "string" ? params.agent : undefined,
     });
 
     return {
@@ -212,8 +240,14 @@ server.tool(
  * Agent calls this at the end of a working session with the final token count.
  *
  * Parameters:
- *   tokens_total — REQUIRED. Final token count for the session.
- *   notes        — optional freeform notes about the session.
+ *   tokens_total   — REQUIRED. Final token count for the session.
+ *   notes          — optional freeform notes about the session.
+ *   outcome        — optional FP-1: session outcome (completed|checkpointed|stale|blocked|aborted|honk)
+ *   project_id     — optional FP-1: override project tag
+ *   plan_id        — optional FP-1: override plan ID
+ *   work_order_id  — optional FP-1: override Work Order ID
+ *   work_session_id— optional FP-1: override Work Session ID
+ *   agent          — optional FP-1: override agent name
  */
 server.tool(
   "record_session",
@@ -230,6 +264,30 @@ server.tool(
       .number()
       .describe("Total tokens used in this session (required)"),
     notes: z.string().optional().describe("Optional notes about this session"),
+    outcome: z
+      .enum(["completed", "checkpointed", "stale", "blocked", "aborted", "honk"])
+      .optional()
+      .describe("FP-1: Session outcome for Librarian Work Order tracking"),
+    project_id: z
+      .string()
+      .optional()
+      .describe("FP-1: Override project tag"),
+    plan_id: z
+      .string()
+      .optional()
+      .describe('FP-1: Override plan ID (e.g. "Sprint-E")'),
+    work_order_id: z
+      .string()
+      .optional()
+      .describe('FP-1: Override Work Order ID (e.g. "A1")'),
+    work_session_id: z
+      .string()
+      .optional()
+      .describe("FP-1: Override Work Session ID"),
+    agent: z
+      .string()
+      .optional()
+      .describe('FP-1: Override agent name (e.g. "OpenWork-Claude")'),
   },
 
   async (params) => {
@@ -238,6 +296,12 @@ server.tool(
     const result = recordSession({
       tokens_total: params.tokens_total,
       notes: typeof params.notes === "string" ? params.notes : undefined,
+      outcome: typeof params.outcome === "string" ? params.outcome as SessionOutcome : undefined,
+      project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+      plan_id: typeof params.plan_id === "string" ? params.plan_id : undefined,
+      work_order_id: typeof params.work_order_id === "string" ? params.work_order_id : undefined,
+      work_session_id: typeof params.work_session_id === "string" ? params.work_session_id : undefined,
+      agent: typeof params.agent === "string" ? params.agent : undefined,
     });
 
     return {

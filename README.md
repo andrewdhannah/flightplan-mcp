@@ -125,22 +125,43 @@ Check current token runway state. Call this at session start and before any high
 }
 ```
 
-### `session_start(provider?, model?, project_id?)`
+If the session is tagged with Librarian work-order metadata, those tags are echoed in the response:
+
+```json
+{
+  "level": "CRUISING",
+  "window_remaining_pct": 52,
+  "plan_id": "Sprint-E",
+  "work_order_id": "A1",
+  "work_session_id": "sess_A1_001",
+  "agent": "OpenWork-Claude"
+}
+```
+
+### `session_start(provider?, model?, project_id?, plan_id?, work_order_id?, work_session_id?, agent?)`
 
 Open a new tracking session. Call at the beginning of each working session.
+
+**FP-1 work tags** (`plan_id`, `work_order_id`, `work_session_id`, `agent`) enable integration with The Librarian's Work Order system — tagging sessions for project tracking and cross-session correlation.
 
 ```json
 {
   "session_id": "a1b2c3d4-...",
   "started_at": "2026-05-04T19:30:00.000Z",
   "level": "REFUELLED",
-  "message": "Session started. Runway restored."
+  "message": "Session started. Runway restored.",
+  "plan_id": "Sprint-E",
+  "work_order_id": "A1"
 }
 ```
 
-### `record_session(tokens_total, notes?)`
+### `record_session(tokens_total, notes?, outcome?, project_id?, plan_id?, work_order_id?, work_session_id?, agent?)`
 
 Archive session data and close the session. Call at session end with your final token count.
+
+**FP-1 additions:**
+- `outcome` — one of `completed`, `checkpointed`, `stale`, `blocked`, `aborted`, `honk`
+- Work tags — override or set tags at session end (they default to values from `session_start`)
 
 ```json
 {
@@ -149,7 +170,10 @@ Archive session data and close the session. Call at session end with your final 
   "duration_minutes": 47.3,
   "final_level": "HEADWIND",
   "sessions_archived": 4,
-  "message": "Session archived. 28,500 tokens over 47.3 minutes. Dead Reckoning unlocks in 1 more session."
+  "outcome": "completed",
+  "work_order_id": "A1",
+  "work_session_id": "sess_A1_001",
+  "message": "Session archived. 28,500 tokens over 47.3 minutes. Outcome: completed. Dead Reckoning unlocks in 1 more session."
 }
 ```
 
@@ -312,7 +336,24 @@ Three tables. All in `~/.flightplan/flightplan.db`.
 
 **`active_session`** — single-row table tracking the current session.
 
+| Column | Type | FP-1 | Description |
+|--------|------|------|-------------|
+| `id` | `TEXT PK` | | Always `'current'` |
+| `session_id` | `TEXT` | | UUID |
+| `started_at` | `TEXT` | | ISO 8601 |
+| `goose_level` | `TEXT` | | Current flight state |
+| `tokens_observed` | `INTEGER` | | Running token count |
+| `provider` | `TEXT` | | AI tool name |
+| `model` | `TEXT` | | Model identifier |
+| `project_id` | `TEXT` | | Project grouping tag |
+| `plan_id` | `TEXT` | ✅ | Librarian Sprint/Plan ID |
+| `work_order_id` | `TEXT` | ✅ | Librarian Work Order ID |
+| `work_session_id` | `TEXT` | ✅ | Librarian Work Session ID |
+| `agent` | `TEXT` | ✅ | Agent name |
+
 **`usage_snapshots`** — historical archive of completed sessions. The ground truth for Phase 2 Dead Reckoning calibration.
+
+All `active_session` columns above, plus: `ended_at`, `duration_minutes`, `tokens_total`, `goose_level_final`, `baseline_at_time`, `baseline_source_at_time`, `notes` (max 2,000 chars), and **FP-1 columns**: `plan_id`, `work_order_id`, `work_session_id`, `agent`, `outcome`.
 
 ---
 
@@ -325,6 +366,8 @@ Nothing leaves your machine.
 - Provider name and key (e.g. `Claude Code` / `claude_code`) — set by you at init
 - Session baseline and warning threshold — set by you at init
 - Per-session data you explicitly record: token count, duration, model, project tag, optional notes
+- **FP-1:** Optional Librarian work tags for session correlation: `plan_id`, `work_order_id`, `work_session_id`, `agent`
+- **FP-1:** Optional session `outcome` for tracking completion status (`completed`, `checkpointed`, `stale`, `blocked`, `aborted`, `honk`)
 - Timestamps for session start and end
 
 **What is never stored:**
@@ -349,6 +392,8 @@ or delete it at any time.
 
 ### Phase 1 — Static Baseline ✅ *Current*
 User-set baseline. Agent self-reports. Goose Scale levels. Status CLI. MCP tools.
+
+**FP-1 (v2 schema):** Librarian work-order tagging. `plan_id`, `work_order_id`, `work_session_id`, `agent`, and `outcome` fields on sessions. Auto-migration from v1 → v2.
 
 ### Phase 2 — Dead Reckoning *(planned)*
 Velocity calculation from `usage_snapshots` history. Auto-calibrating baseline after 5 sessions. Real `burn_rate_per_hour` and `time_remaining_minutes`. Confidence scoring. Project-specific velocity profiles via `project_id`.

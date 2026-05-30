@@ -52,6 +52,10 @@ interface ActiveSessionRow {
   provider:        string | null;
   model:           string | null;
   project_id:      string | null;
+  plan_id:         string | null;
+  work_order_id:   string | null;
+  work_session_id: string | null;
+  agent:           string | null;
 }
 
 // ─── Recommended action strings ───────────────────────────────────────────────
@@ -123,7 +127,8 @@ export function getRunway(): RunwayResponse {
   // Returns undefined if the row doesn't exist yet (very first run).
   const active = db.prepare(`
     SELECT session_id, started_at, goose_level, tokens_observed,
-           provider, model, project_id
+           provider, model, project_id,
+           plan_id, work_order_id, work_session_id, agent
     FROM active_session
     WHERE id = 'current'
   `).get() as ActiveSessionRow | undefined;
@@ -171,25 +176,26 @@ export function getRunway(): RunwayResponse {
     window_remaining_pct:    runwayPct,
     window_remaining_tokens: runwayTokens,
 
-    // token_range: null in Phase 1 — returning { low: x, high: x } would
-    // masquerade as a confidence interval. Phase 2 Dead Reckoning populates this.
+    // token_range: null in Phase 1
     token_range: null,
 
-    // Velocity fields: null in Phase 1. An agent reading 0 might multiply
-    // 0 * planned_minutes = 0 and conclude runway is fine. null is honest.
+    // Velocity fields: null in Phase 1
     burn_rate_per_hour:     null,
     time_remaining_minutes: null,
 
-    // data_source tells the agent how much to trust the numbers.
-    // 'agent_report' = tokens_observed came from session_start/record_session calls.
-    // 'plan_default' = no session active, showing baseline only.
     data_source: sessionActive ? 'agent_report' : 'plan_default',
 
     formation_trust: formationTrust,
     recommended_action: recommendedAction,
 
-    // Debug metadata — typed in RunwayResponse, optional field.
-    // Surfaced for transparency during Phase 1 testing.
+    // FP-1: Librarian work tags (echoed if present)
+    project_id:     active?.project_id ?? undefined,
+    plan_id:        active?.plan_id ?? undefined,
+    work_order_id:  active?.work_order_id ?? undefined,
+    work_session_id: active?.work_session_id ?? undefined,
+    agent:          active?.agent ?? undefined,
+
+    // Debug metadata
     debug: {
       baseline_tokens:    baseline,
       tokens_observed:    tokensObserved,

@@ -22,7 +22,7 @@
 
 import Database from 'better-sqlite3';
 import { getDbPath, ensureFlightplanDir } from './paths.js';
-import { SCHEMA_STATEMENTS } from './schema.js';
+import { SCHEMA_STATEMENTS, migrateV1toV2 } from './schema.js';
 
 // ─── Singleton instance ────────────────────────────────────────────────────────
 
@@ -109,4 +109,7 @@ function applySchema(db: Database.Database): void {
       `Original error: ${err instanceof Error ? err.message : String(err)}`
     );
   }
+
+  // Run FP-1 migration (v1 → v2) if needed
+  migrateV1toV2(db);
 }

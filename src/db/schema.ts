@@ -36,6 +36,11 @@
  *
  * Keys written at schema apply time:
  *   schema_version — current schema version number (e.g. '1')
+ *
+ * Migration history:
+ *   v1 — Initial schema (Phase 1)
+ *   v2 — FP-1: Add Librarian work tags (plan_id, work_order_id, work_session_id,
+ *        agent, outcome) to active_session and usage_snapshots
  */
 const FLIGHTPLAN_META_TABLE = `
   CREATE TABLE IF NOT EXISTS flightplan_meta (
@@ -190,6 +195,95 @@ const USAGE_SNAPSHOTS_TABLE = `
  * MIGRATION POLICY: Never edit existing statements. Add new ones below,
  * and bump schema_version in flightplan_meta when Phase 2 ships.
  */
+// ─── FP-1 Migration: Librarian Work Tags (v1 → v2) ─────────────────────────────
+
+/**
+ * Adds Librarian work-order tagging columns to active_session.
+ * All columns are nullable — backward compatible with untagged sessions.
+ */
+const FP1_ACTIVE_SESSION_MIGRATION = `
+  ALTER TABLE active_session ADD COLUMN plan_id TEXT;
+`;
+const FP1_ACTIVE_SESSION_WO = `
+  ALTER TABLE active_session ADD COLUMN work_order_id TEXT;
+`;
+const FP1_ACTIVE_SESSION_WS = `
+  ALTER TABLE active_session ADD COLUMN work_session_id TEXT;
+`;
+const FP1_ACTIVE_SESSION_AGENT = `
+  ALTER TABLE active_session ADD COLUMN agent TEXT;
+`;
+
+/**
+ * Adds Librarian work-order tagging columns + outcome to usage_snapshots.
+ */
+const FP1_USAGE_WO = `
+  ALTER TABLE usage_snapshots ADD COLUMN work_order_id TEXT;
+`;
+const FP1_USAGE_WS = `
+  ALTER TABLE usage_snapshots ADD COLUMN work_session_id TEXT;
+`;
+const FP1_USAGE_AGENT = `
+  ALTER TABLE usage_snapshots ADD COLUMN agent TEXT;
+`;
+const FP1_USAGE_OUTCOME = `
+  ALTER TABLE usage_snapshots ADD COLUMN outcome TEXT;
+`;
+
+/**
+ * List of migration SQL statements for v1 → v2.
+ * Each ALTER TABLE ADD COLUMN uses IF NOT EXISTS guard via PRAGMA at runtime.
+ */
+const FP1_MIGRATION_STATEMENTS = [
+  FP1_ACTIVE_SESSION_MIGRATION,
+  FP1_ACTIVE_SESSION_WO,
+  FP1_ACTIVE_SESSION_WS,
+  FP1_ACTIVE_SESSION_AGENT,
+  FP1_USAGE_WO,
+  FP1_USAGE_WS,
+  FP1_USAGE_AGENT,
+  FP1_USAGE_OUTCOME,
+] as const;
+
+/**
+ * Check whether a column exists in a table (SQLite PRAGMA).
+ */
+function columnExists(db: import('better-sqlite3').Database, table: string, column: string): boolean {
+  interface ColumnInfo { name: string }
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as ColumnInfo[];
+  return rows.some(c => c.name === column);
+}
+
+/**
+ * Run the FP-1 migration if the schema version is below 2.
+ * Guards each ALTER TABLE with column-existence checks so it's idempotent.
+ */
+export function migrateV1toV2(db: import('better-sqlite3').Database): void {
+  const version = (db.prepare(
+    `SELECT value FROM flightplan_meta WHERE key = 'schema_version'`
+  ).get() as { value: string } | undefined)?.value ?? '1';
+
+  if (version !== '1') return;  // already migrated or newer
+
+  const migration = db.transaction(() => {
+    for (const sql of FP1_MIGRATION_STATEMENTS) {
+      // Skip if column already exists
+      const match = sql.match(/ALTER TABLE (\w+) ADD COLUMN (\w+)/);
+      if (match && match[1] && match[2]) {
+        const table = match[1];
+        const column = match[2];
+        if (columnExists(db, table, column)) continue;
+      }
+      db.exec(sql);
+    }
+    db.prepare(`UPDATE flightplan_meta SET value = '2' WHERE key = 'schema_version'`).run();
+  });
+
+  migration();
+}
+
+// ─── Schema export ─────────────────────────────────────────────────────────────
+
 export const SCHEMA_STATEMENTS = [
   FLIGHTPLAN_META_TABLE,
   FLIGHTPLAN_META_SEED,

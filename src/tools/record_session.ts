@@ -53,6 +53,11 @@ const MAX_NOTES_LENGTH = 2_000;
 /**
  * Parameters the agent passes to record_session().
  */
+/**
+ * Allowed outcomes for record_session (FP-1).
+ */
+export type SessionOutcome = 'completed' | 'checkpointed' | 'stale' | 'blocked' | 'aborted' | 'honk';
+
 export interface RecordSessionParams {
   /**
    * Total tokens consumed in this session.
@@ -76,6 +81,16 @@ export interface RecordSessionParams {
    * Used in Phase 2 for pattern classification.
    */
   notes?: string;
+
+  /** FP-1: Optional outcome of the session for Librarian Work Order tracking. */
+  outcome?: SessionOutcome;
+
+  /** FP-1: Optional explicit work tags (overrides active session tags). */
+  project_id?:      string;
+  plan_id?:         string;
+  work_order_id?:   string;
+  work_session_id?: string;
+  agent?:           string;
 }
 
 // ─── Response shape ───────────────────────────────────────────────────────────
@@ -94,6 +109,11 @@ export interface RecordSessionResponse {
   final_level: string;
   /** How many sessions are now archived (Phase 2 unlocks at 5). */
   sessions_archived: number;
+  /** FP-1: Outcome of the session, if provided. */
+  outcome?: string;
+  /** FP-1: Librarian work tags, if present. */
+  work_order_id?:   string;
+  work_session_id?: string;
   /** Human-readable summary. */
   message: string;
 }
@@ -111,6 +131,10 @@ interface ActiveSessionRow {
   provider:        string | null;
   model:           string | null;
   project_id:      string | null;
+  plan_id:         string | null;
+  work_order_id:   string | null;
+  work_session_id: string | null;
+  agent:           string | null;
 }
 
 // ─── Tool implementation ──────────────────────────────────────────────────────
@@ -158,7 +182,8 @@ export function recordSession(params: RecordSessionParams): RecordSessionRespons
   // ── Step 3: Read active session ────────────────────────────────────────────
   const active = db.prepare(`
     SELECT session_id, started_at, goose_level, tokens_observed,
-           provider, model, project_id
+           provider, model, project_id,
+           plan_id, work_order_id, work_session_id, agent
     FROM active_session
     WHERE id = 'current'
   `).get() as ActiveSessionRow | undefined;
@@ -188,20 +213,28 @@ export function recordSession(params: RecordSessionParams): RecordSessionRespons
   const baselineSource = getBaselineSource(db);  // Phase 2: track which sessions used which source
   const finalLevel     = calculateGooseLevel(params.tokens_total, baseline, true);
 
-  // ── Step 6: Archive + clear in a single transaction ────────────────────────
+  // ── Step 6: Determine tags (used outside transaction) ──────────────────────
+  // FP-1: Determine tags before the transaction so they're available in response
+  const tagProjectId     = params.project_id     ?? active.project_id;
+  const tagPlanId        = params.plan_id        ?? active.plan_id;
+  const tagWorkOrderId   = params.work_order_id  ?? active.work_order_id;
+  const tagWorkSessionId = params.work_session_id ?? active.work_session_id;
+  const tagAgent         = params.agent          ?? active.agent;
+  const outcome          = params.outcome        ?? null;
+
+  // ── Step 7: Archive + clear in a single transaction ────────────────────────
   // Both operations must succeed together — we never want a session archived
   // but active_session not cleared, or vice versa.
   const archiveTransaction = db.transaction(() => {
-
     // Write to usage_snapshots.
-    // ON CONFLICT DO NOTHING: if this session_id was already archived
-    // (e.g. record_session called twice), silently skip the second insert.
+    // FP-1: Added plan_id, work_order_id, work_session_id, agent, outcome.
     db.prepare(`
       INSERT INTO usage_snapshots
         (session_id, started_at, ended_at, duration_minutes,
          tokens_total, goose_level_final, provider, model,
-         project_id, baseline_at_time, baseline_source_at_time, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         project_id, baseline_at_time, baseline_source_at_time, notes,
+         plan_id, work_order_id, work_session_id, agent, outcome)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_id) DO NOTHING
     `).run(
       sessionId,
@@ -212,14 +245,20 @@ export function recordSession(params: RecordSessionParams): RecordSessionRespons
       finalLevel,
       active.provider,
       active.model,
-      active.project_id,
+      tagProjectId,
       baseline,
-      baselineSource,   // Phase 2: 'default' | 'manual' | 'calibrated' | 'api'
-      notes             // sanitized above — null or capped string
+      baselineSource,
+      notes,
+      tagPlanId,
+      tagWorkOrderId,
+      tagWorkSessionId,
+      tagAgent,
+      outcome
     );
 
     // Clear active_session back to PREFLIGHT state.
     // Reset all fields to null except id — the row stays, just emptied.
+    // FP-1: Also clear plan_id, work_order_id, work_session_id, agent.
     db.prepare(`
       UPDATE active_session
       SET session_id      = NULL,
@@ -228,7 +267,11 @@ export function recordSession(params: RecordSessionParams): RecordSessionRespons
           tokens_observed = 0,
           provider        = NULL,
           model           = NULL,
-          project_id      = NULL
+          project_id      = NULL,
+          plan_id         = NULL,
+          work_order_id   = NULL,
+          work_session_id = NULL,
+          agent           = NULL
       WHERE id = 'current'
     `).run();
   });
@@ -236,8 +279,6 @@ export function recordSession(params: RecordSessionParams): RecordSessionRespons
   archiveTransaction();
 
   // ── Step 7: Count archived sessions ────────────────────────────────────────
-  // Phase 2 Dead Reckoning unlocks after 5 sessions.
-  // Surface the count so the agent (and user) can see progress.
   const countRow = db.prepare(
     `SELECT COUNT(*) as n FROM usage_snapshots`
   ).get() as { n: number };
@@ -250,13 +291,14 @@ export function recordSession(params: RecordSessionParams): RecordSessionRespons
     `Session archived. ${params.tokens_total.toLocaleString()} tokens over ` +
     `${durationMinutes} minutes. Final level: ${finalLevel}.`;
 
+  if (outcome) message += ` Outcome: ${outcome}.`;
   if (phase2Remaining > 0) {
     message += ` Dead Reckoning unlocks in ${phase2Remaining} more session${phase2Remaining === 1 ? '' : 's'}.`;
   } else {
     message += ` Dead Reckoning active — baseline improving automatically.`;
   }
 
-  return {
+  const response: RecordSessionResponse = {
     session_id:        sessionId,
     tokens_total:      params.tokens_total,
     duration_minutes:  durationMinutes,
@@ -264,4 +306,11 @@ export function recordSession(params: RecordSessionParams): RecordSessionRespons
     sessions_archived: sessionsArchived,
     message,
   };
+
+  // FP-1: Include outcome and work tags in response when present
+  if (outcome)           response.outcome         = outcome;
+  if (tagWorkOrderId)    response.work_order_id   = tagWorkOrderId;
+  if (tagWorkSessionId)  response.work_session_id = tagWorkSessionId;
+
+  return response;
 }

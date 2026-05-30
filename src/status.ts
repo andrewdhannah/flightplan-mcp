@@ -134,6 +134,10 @@ interface ActiveSessionRow {
   provider: string | null;
   model: string | null;
   project_id: string | null;
+  plan_id: string | null;
+  work_order_id: string | null;
+  work_session_id: string | null;
+  agent: string | null;
 }
 
 /**
@@ -202,7 +206,8 @@ export function gatherStatusData(): StatusData {
     .prepare(
       `
     SELECT session_id, started_at, goose_level, tokens_observed,
-           provider, model, project_id
+           provider, model, project_id,
+           plan_id, work_order_id, work_session_id, agent
     FROM active_session
     WHERE id = 'current'
   `,
@@ -318,6 +323,18 @@ function printStatus(data: StatusData): void {
     }
     if (active?.project_id) {
       console.log(`    Project           ${c.dim(active.project_id)}`);
+    }
+    if (active?.plan_id) {
+      console.log(`    Plan              ${c.dim(active.plan_id)}`);
+    }
+    if (active?.work_order_id) {
+      console.log(`    Work Order        ${c.dim(active.work_order_id)}`);
+    }
+    if (active?.work_session_id) {
+      console.log(`    Work Session      ${c.dim(active.work_session_id)}`);
+    }
+    if (active?.agent) {
+      console.log(`    Agent             ${c.dim(active.agent)}`);
     }
     console.log("");
 

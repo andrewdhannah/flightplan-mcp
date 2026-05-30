@@ -84,23 +84,18 @@ export interface RunwayResponse {
   /**
    * Low/high token estimate band.
    * null = not yet computed; Phase 2 Dead Reckoning fills this in.
-   * Phase 1 always returns null — returning { low: x, high: x } would
-   * masquerade as a confidence interval when it isn't one yet.
    */
   token_range: { low: number; high: number } | null;
 
   /**
    * Tokens consumed per hour, estimated from session history.
    * null = not yet computed; Phase 2 fills this in.
-   * Phase 1 always returns null — returning 0 would be misleading
-   * (an agent multiplying 0 * minutes concludes everything is fine).
    */
   burn_rate_per_hour: number | null;
 
   /**
    * Estimated minutes until runway exhausted at current burn rate.
    * null = not yet computed; Phase 2 fills this in.
-   * Phase 1 always returns null — depends on burn_rate_per_hour.
    */
   time_remaining_minutes: number | null;
 
@@ -113,10 +108,15 @@ export interface RunwayResponse {
   /** What the agent should do right now. */
   recommended_action: string;
 
+  /** FP-1: Optional Librarian work tags (present when session is tagged). */
+  project_id?:      string;
+  plan_id?:         string;
+  work_order_id?:   string;
+  work_session_id?: string;
+  agent?:           string;
+
   /**
    * Optional debug metadata — present during Phase 1 testing.
-   * Not intended for agent consumption; surfaced for human transparency.
-   * Phase 2 will formalize this or move it to a separate diagnostic endpoint.
    */
   debug?: {
     baseline_tokens:    number;

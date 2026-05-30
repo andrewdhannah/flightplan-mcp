@@ -71,6 +71,26 @@ export interface SessionStartParams {
    * project names.
    */
   project_id?: string;
+  /**
+   * Optional Librarian plan ID (e.g. "Sprint-E").
+   * FP-1: Work-tagged Flight Sessions — enables correlation with Work Orders.
+   */
+  plan_id?: string;
+  /**
+   * Optional Librarian Work Order ID (e.g. "A1").
+   * FP-1: Work-tagged Flight Sessions.
+   */
+  work_order_id?: string;
+  /**
+   * Optional Librarian Work Session ID (e.g. "sess_A1_001").
+   * FP-1: Work-tagged Flight Sessions.
+   */
+  work_session_id?: string;
+  /**
+   * Optional agent name (e.g. "OpenWork-Claude").
+   * FP-1: Work-tagged Flight Sessions.
+   */
+  agent?: string;
 }
 
 // ─── Response shape ───────────────────────────────────────────────────────────
@@ -87,6 +107,12 @@ export interface SessionStartResponse {
   level: string;
   /** Human-readable confirmation message. */
   message: string;
+  /** FP-1: Optional Librarian tags echoed back. */
+  project_id?: string;
+  plan_id?: string;
+  work_order_id?: string;
+  work_session_id?: string;
+  agent?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -181,9 +207,13 @@ export function sessionStart(params: SessionStartParams = {}): SessionStartRespo
   // Cap all agent-supplied strings to MAX_FIELD_LENGTH.
   // provider falls back to config value if not passed; model and project_id
   // default to null (stored as NULL in DB).
-  const provider  = truncate(params.provider) ?? configProvider;
-  const model     = truncate(params.model)     ?? null;
-  const projectId = truncate(params.project_id) ?? null;
+  const provider      = truncate(params.provider)      ?? configProvider;
+  const model         = truncate(params.model)          ?? null;
+  const projectId     = truncate(params.project_id)     ?? null;
+  const planId        = truncate(params.plan_id)        ?? null;
+  const workOrderId   = truncate(params.work_order_id)  ?? null;
+  const workSessionId = truncate(params.work_session_id) ?? null;
+  const agent         = truncate(params.agent)          ?? null;
 
   // ── Step 4: Generate session ID and timestamp ──────────────────────────────
   const sessionId = generateSessionId();
@@ -191,14 +221,13 @@ export function sessionStart(params: SessionStartParams = {}): SessionStartRespo
 
   // ── Step 5: Write to active_session ───────────────────────────────────────
   // UPSERT on id = 'current' — single-row table.
-  // We only reach here if no session was active (guard above), so this
-  // is effectively always an INSERT in practice.
+  // FP-1: Added plan_id, work_order_id, work_session_id, agent columns.
   db.prepare(`
     INSERT INTO active_session
       (id, session_id, started_at, goose_level, tokens_observed,
-       provider, model, project_id)
+       provider, model, project_id, plan_id, work_order_id, work_session_id, agent)
     VALUES
-      ('current', ?, ?, 'REFUELLED', 0, ?, ?, ?)
+      ('current', ?, ?, 'REFUELLED', 0, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       session_id       = excluded.session_id,
       started_at       = excluded.started_at,
@@ -206,10 +235,15 @@ export function sessionStart(params: SessionStartParams = {}): SessionStartRespo
       tokens_observed  = excluded.tokens_observed,
       provider         = excluded.provider,
       model            = excluded.model,
-      project_id       = excluded.project_id
-  `).run(sessionId, startedAt, provider, model, projectId);
+      project_id       = excluded.project_id,
+      plan_id          = excluded.plan_id,
+      work_order_id    = excluded.work_order_id,
+      work_session_id  = excluded.work_session_id,
+      agent            = excluded.agent
+  `).run(sessionId, startedAt, provider, model, projectId,
+         planId, workOrderId, workSessionId, agent);
 
-  return {
+  const response: SessionStartResponse = {
     session_id: sessionId,
     started_at: startedAt,
     level:      'REFUELLED',
@@ -218,4 +252,13 @@ export function sessionStart(params: SessionStartParams = {}): SessionStartRespo
       `Call get_runway() to check status. ` +
       `Call record_session() with your final token count when done.`,
   };
+
+  // Echo back Librarian tags if provided
+  if (projectId)     response.project_id     = projectId;
+  if (planId)        response.plan_id        = planId;
+  if (workOrderId)   response.work_order_id  = workOrderId;
+  if (workSessionId) response.work_session_id = workSessionId;
+  if (agent)         response.agent          = agent;
+
+  return response;
 }
