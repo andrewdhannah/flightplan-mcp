@@ -217,6 +217,9 @@ const FP1_ACTIVE_SESSION_AGENT = `
 /**
  * Adds Librarian work-order tagging columns + outcome to usage_snapshots.
  */
+const FP1_USAGE_PLAN_ID = `
+  ALTER TABLE usage_snapshots ADD COLUMN plan_id TEXT;
+`;
 const FP1_USAGE_WO = `
   ALTER TABLE usage_snapshots ADD COLUMN work_order_id TEXT;
 `;
@@ -239,6 +242,7 @@ const FP1_MIGRATION_STATEMENTS = [
   FP1_ACTIVE_SESSION_WO,
   FP1_ACTIVE_SESSION_WS,
   FP1_ACTIVE_SESSION_AGENT,
+  FP1_USAGE_PLAN_ID,
   FP1_USAGE_WO,
   FP1_USAGE_WS,
   FP1_USAGE_AGENT,
