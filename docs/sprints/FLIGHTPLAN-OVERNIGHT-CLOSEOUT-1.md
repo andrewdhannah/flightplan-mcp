@@ -9,9 +9,9 @@ Status: PASS
 
 ## Summary
 
-Implemented the Flightplan overnight build chain: 7 sprints adding
-calibration-safe analytics, Dead Reckoning estimation, governed gates,
-session receipts, landing workflow, and privacy hardening.
+Implemented the Flightplan overnight build chain: 6 implementation sprints
+plus closeout, adding calibration-safe analytics, Dead Reckoning estimation,
+governed gates, session receipts, landing workflow, and privacy hardening.
 
 The Flightplan codebase now provides:
 - **Observed token history** — stats by model, provider, project, goose level
@@ -36,6 +36,7 @@ The Flightplan codebase now provides:
 | FLIGHTPLAN-SESSION-RECEIPTS-1             | PASS   | `3573bd9` | Deterministic session receipt generation |
 | FLIGHTPLAN-LANDING-AND-HANDOFF-1          | PASS   | `ff07d49` | Landing assessment with handoff templates |
 | FLIGHTPLAN-PRIVACY-AND-SAFETY-HARDENING-1 | PASS   | `7768427` | Privacy boundary document, gitignore hardening |
+| FLIGHTPLAN-OVERNIGHT-CLOSEOUT-1           | PASS   | `08ff0d6` | Final validation report and Git state |
 
 ## Files Created
 
