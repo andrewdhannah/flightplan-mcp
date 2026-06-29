@@ -305,6 +305,31 @@ Whichever pattern you use, the same three call points apply:
 
 ---
 
+## Agent Lifecycle Usage
+
+For long-running agent work, FlightPlan should be checked at startup,
+before expensive actions, periodically during long sessions, and during
+handoff/closeout.
+
+FlightPlan defines three lifecycle hooks:
+
+1. **Startup / Preflight** — assess runway before beginning work
+2. **Periodic Check** — re-assess before expensive operations
+3. **Handoff / Closeout** — land the session and record evidence
+
+Details and copy-paste templates:
+
+- [Agent Lifecycle Integration Guide](docs/AGENT-LIFECYCLE-INTEGRATION.md)
+- [Agent Packet Template](docs/AGENT-PACKET-FLIGHTPLAN-TEMPLATE.md)
+
+```text
+FlightPlan Startup: status + stats + estimate + gate + (optional) session_start
+FlightPlan Check:   gate --model <m> --provider <p> before expensive operations
+FlightPlan Landing: land + record_session + receipt + stats + calibration report
+```
+
+---
+
 ## Architecture
 
 ```
