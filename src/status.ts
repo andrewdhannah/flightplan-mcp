@@ -503,6 +503,218 @@ function printExport(data: StatusData, outPath: string): void {
   console.log("");
 }
 
+// ─── Help system ───────────────────────────────────────────────────────────────
+
+/**
+ * Exit codes:
+ *   0 = success
+ *   1 = user/input/runtime error (missing args, invalid input, runtime failure)
+ *   2 = validation/configuration error (DB schema, config issues)
+ */
+
+const HELP_TEXTS: Record<string, string> = {
+  status: `Usage: flightplan status [--json]
+
+Show current token runway state.
+
+Options:
+  --json     Machine-readable JSON output
+
+Examples:
+  flightplan status          Human-readable status display
+  flightplan status --json   JSON for non-MCP agents
+
+Exit codes:
+  0  Success
+  1  Runtime error (DB not found, etc.)`,
+  export: `Usage: flightplan export [--out <path>]
+
+Write current runway state as Markdown for any LLM to read.
+
+Options:
+  --out <path>  Custom output path (default: ./RUNWAY_STATE.md)
+
+Examples:
+  flightplan export                Write to ./RUNWAY_STATE.md
+  flightplan export --out /tmp/    Write to /tmp/RUNWAY_STATE.md
+
+Exit codes:
+  0  Success
+  1  Runtime error`,
+  stats: `Usage: flightplan stats [--json]
+
+Show aggregate usage statistics across all sessions.
+
+Options:
+  --json     Machine-readable JSON output
+
+Examples:
+  flightplan stats            Human-readable stats summary
+  flightplan stats --json     JSON for programmatic use
+
+Exit codes:
+  0  Success
+  1  Runtime error`,
+  calibration: `Usage: flightplan calibration <subcommand> [--json]
+
+Calibration eligibility management for Dead Reckoning.
+
+Subcommands:
+  report       Show calibration eligibility report (default)
+  candidates   List calibration-eligible sessions
+
+Options:
+  --json     Machine-readable JSON output
+
+Examples:
+  flightplan calibration report          Human-readable report
+  flightplan calibration candidates      List eligible sessions
+  flightplan calibration report --json
+
+Exit codes:
+  0  Success
+  1  Runtime error`,
+  anomalies: `Usage: flightplan anomalies [--json]
+
+Detect anomalous sessions (idle skew, zero-token, missing metadata).
+
+Options:
+  --json     Machine-readable JSON output
+
+Examples:
+  flightplan anomalies             Human-readable anomaly report
+  flightplan anomalies --json      JSON for programmatic use
+
+Exit codes:
+  0  Success
+  1  Runtime error`,
+  estimate: `Usage: flightplan estimate --model <model> --provider <provider> [--project <project>] [--json]
+
+Estimate token runway needed for a proposed task using historical data.
+
+Required:
+  --model <model>         Model name (e.g. deepseek-v4-flash)
+  --provider <provider>   AI provider (e.g. OpenWork)
+
+Options:
+  --project <project>     Project name for scoped estimate
+  --json                  Machine-readable JSON output
+
+Examples:
+  flightplan estimate --model deepseek-v4-flash --provider OpenWork
+  flightplan estimate --model gpt-4 --provider OpenAI --project MyApp --json
+
+Error behavior:
+  Missing --model or --provider exits with code 1.
+  If no historical data, falls back to configured baseline (WAYWARD confidence).
+
+Exit codes:
+  0  Success
+  1  Missing required arguments or runtime error`,
+  gate: `Usage: flightplan gate --model <model> --provider <provider> [--project <project>] [--work-type <type>] [--json]
+
+Check governed runway decision before starting work.
+
+Required:
+  --model <model>         Model name (e.g. deepseek-v4-flash)
+  --provider <provider>   AI provider (e.g. OpenWork)
+
+Options:
+  --project <project>     Project name for scoped estimate
+  --work-type <type>      Type of work (e.g. sprint, refactor)
+  --json                  Machine-readable JSON output
+
+Decisions:
+  proceed                  Normal work allowed
+  proceed_with_checkpoint  Work allowed, checkpoint first
+  split                    Split into smaller units
+  land_first               Land before starting new work
+  refuse                   Cannot proceed
+
+Examples:
+  flightplan gate --model deepseek-v4-flash --provider OpenWork --work-type sprint
+  flightplan gate --model gpt-4 --provider OpenAI --json
+
+Exit codes:
+  0  Success
+  1  Missing required arguments or runtime error`,
+  receipt: `Usage: flightplan receipt (--last | --session <id>) [--json] [--out <path>]
+
+Export a deterministic session receipt.
+
+Options:
+  --last                 Get the most recent session receipt
+  --session <id>         Get receipt for a specific session ID
+  --json                 Machine-readable JSON output (to stdout)
+  --out <path>           Write receipt to file (always JSON)
+
+Examples:
+  flightplan receipt --last                  Show most recent receipt
+  flightplan receipt --last --json           JSON to stdout
+  flightplan receipt --session <id> --json
+  flightplan receipt --last --out receipt.json
+
+Exit codes:
+  0  Success
+  1  Missing required arguments or runtime error`,
+  land: `Usage: flightplan land [--tokens-total <n>] [--outcome <o>] [--json]
+
+Assess whether the current session needs to land.
+
+Options:
+  --tokens-total <n>     Optional token total for landing assessment
+  --outcome <o>          Session outcome (completed|checkpointed|stale|blocked|aborted|honk)
+  --json                 Machine-readable JSON output
+
+Examples:
+  flightplan land                    Check if landing is needed
+  flightplan land --json             JSON output
+  flightplan land --tokens-total 50000 --outcome completed --json
+
+Exit codes:
+  0  Success
+  1  Runtime error`,
+};
+
+function showHelp(command: string): void {
+  const help = HELP_TEXTS[command];
+  if (help) {
+    console.log(help);
+    return;
+  }
+
+  // Default: show general help
+  console.log(`🪿 Flightplan MCP — Token Runway Governor
+
+Usage:
+  flightplan <command> [options]
+
+Commands:
+  status                        Show current runway state
+  stats                         Show aggregate usage statistics
+  calibration                   Calibration eligibility management
+  anomalies                     Detect anomalous sessions
+  estimate                      Estimate token runway for a task
+  gate                          Check governed runway decision
+  receipt                       Export session receipt
+  land                          Assess landing status
+  export                        Write RUNWAY_STATE.md for any LLM
+
+Global options:
+  --json                        Machine-readable JSON output
+  --help                        Show help for any command
+
+Run "flightplan <command> --help" for command-specific help.
+`);
+}
+
+function printJsonError(code: string, message: string): void {
+  console.log(JSON.stringify({
+    ok: false,
+    error: { code, message },
+  }, null, 2));
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 /**
@@ -521,19 +733,34 @@ function main(): void {
   const args = process.argv.slice(2);
   const command = args[0] ?? "status"; // default to 'status' if no arg given
   const useJson = args.includes("--json");
+  const wantsHelp = args.includes("--help") || args.includes("-h");
 
   // --out flag: flightplan export --out /some/path/RUNWAY_STATE.md
-  // Extract into a named variable first so TypeScript can narrow the type.
-  // The ternary condition alone isn't enough — TS still sees string | undefined
-  // at the call site even when the condition guards it.
   const outFlagIndex = args.indexOf("--out");
   const outFlagValue = outFlagIndex !== -1 ? args[outFlagIndex + 1] : undefined;
   const outPath = outFlagValue
     ? path.resolve(outFlagValue)
-    : path.resolve("RUNWAY_STATE.md"); // default: current working directory
+    : path.resolve("RUNWAY_STATE.md");
 
   try {
-    // ─── Route to new commands ──────────────────────────────────────────────
+    // ─── Help routing ───────────────────────────────────────────────────────
+    // Every command supports --help. Catch it before any logic runs.
+    const helpCommands = new Set([
+      "status", "export", "stats", "calibration", "anomalies",
+      "estimate", "gate", "receipt", "land",
+    ]);
+
+    if (wantsHelp && helpCommands.has(command)) {
+      showHelp(command);
+      return;
+    }
+
+    if (command === "--help" || command === "-h") {
+      showHelp("");
+      return;
+    }
+
+    // ─── Route to commands ──────────────────────────────────────────────────
     if (command === "stats") {
       cmdStats(useJson);
       return;
@@ -541,6 +768,11 @@ function main(): void {
 
     if (command === "calibration") {
       const sub = args[1];
+      // Subcommand help: flightplan calibration --help
+      if (wantsHelp || sub === "--help" || sub === "-h") {
+        showHelp("calibration");
+        return;
+      }
       if (sub === "report") {
         cmdCalibrationReport(useJson);
       } else if (sub === "candidates") {
@@ -565,7 +797,11 @@ function main(): void {
       const project = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
 
       if (!model || !provider) {
-        console.error("Usage: flightplan estimate --model <model> --provider <provider> [--project <project>]");
+        if (useJson) {
+          printJsonError("MISSING_REQUIRED_ARGUMENT", "Missing required argument: --model and --provider are required");
+        } else {
+          console.error("Usage: flightplan estimate --model <model> --provider <provider> [--project <project>]");
+        }
         process.exit(1);
       }
       cmdEstimate(model, provider, project, useJson);
@@ -583,7 +819,11 @@ function main(): void {
       const workType = workTypeIdx !== -1 ? args[workTypeIdx + 1] : undefined;
 
       if (!model || !provider) {
-        console.error("Usage: flightplan gate --model <model> --provider <provider> [--project <project>] [--work-type <type>]");
+        if (useJson) {
+          printJsonError("MISSING_REQUIRED_ARGUMENT", "Missing required argument: --model and --provider are required");
+        } else {
+          console.error("Usage: flightplan gate --model <model> --provider <provider> [--project <project>] [--work-type <type>]");
+        }
         process.exit(1);
       }
       cmdGate(model, provider, project, workType, useJson);
@@ -597,8 +837,12 @@ function main(): void {
       const outPathReceipt = outFlagValue ? path.resolve(outFlagValue) : undefined;
 
       if (!sessionId && !hasLast) {
-        console.error("Usage: flightplan receipt --last [--json] [--out <path>]");
-        console.error("       flightplan receipt --session <session_id> [--json]");
+        if (useJson) {
+          printJsonError("MISSING_REQUIRED_ARGUMENT", "Missing required argument: use --last or --session <id>");
+        } else {
+          console.error("Usage: flightplan receipt --last [--json] [--out <path>]");
+          console.error("       flightplan receipt --session <session_id> [--json]");
+        }
         process.exit(1);
       }
       cmdReceipt(sessionId, outPathReceipt, useJson);
@@ -620,27 +864,41 @@ function main(): void {
     }
 
     // ─── Legacy commands ────────────────────────────────────────────────────
-    // Gather data once — all three output paths consume the same object.
     const data = gatherStatusData();
 
     if (command === "export") {
       printExport(data, outPath);
-    } else if (useJson) {
-      printJson(data);
+    } else if (command === "status" || command === "") {
+      if (useJson) {
+        printJson(data);
+      } else {
+        printStatus(data);
+      }
     } else {
-      printStatus(data);
+      // Unknown command
+      if (useJson) {
+        printJsonError("UNKNOWN_COMMAND", `Unknown command: ${command}`);
+      } else {
+        console.error(`🪿 Unknown command: ${command}`);
+        console.error(`Run "flightplan --help" to see available commands.`);
+      }
+      process.exit(1);
     }
   } catch (err) {
     if (err instanceof Error && err.message.includes("no such table")) {
-      console.error(
-        "\n🪿 Flightplan database not found.\n" +
-          "   Run: npx flightplan-mcp init\n",
-      );
+      const msg = "\n🪿 Flightplan database not found.\n  Run: npx flightplan-mcp init\n";
+      if (useJson) {
+        printJsonError("DATABASE_NOT_FOUND", "Flightplan database not found. Run: npx flightplan-mcp init");
+      } else {
+        console.error(msg);
+      }
     } else {
-      console.error(
-        "\n🪿 Status check failed:",
-        err instanceof Error ? err.message : err,
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      if (useJson) {
+        printJsonError("RUNTIME_ERROR", msg);
+      } else {
+        console.error("\n🪿 Status check failed:", msg);
+      }
     }
     process.exit(1);
   }

@@ -55,6 +55,18 @@ export function openDb(): Database.Database {
   // Return cached connection if already open.
   if (_db) return _db;
 
+  // Allow override via FLIGHTPLAN_DB_PATH env var for testing.
+  // When set, points to a temp DB file instead of the live ~/.flightplan/flightplan.db.
+  // The caller is responsible for creating the directory and cleaning up the file.
+  const envOverride = process.env.FLIGHTPLAN_DB_PATH;
+
+  if (envOverride) {
+    _db = new Database(envOverride);
+    _db.pragma('journal_mode = WAL');
+    applySchema(_db);
+    return _db;
+  }
+
   // Ensure the directory exists before better-sqlite3 tries to open the file.
   // better-sqlite3 creates the file but not the parent directory.
   ensureFlightplanDir();
