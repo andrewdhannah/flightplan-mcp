@@ -38,3 +38,6 @@ RUNWAY_STATE.md
 # Claude Code generated
 sessions/
 
+# Local evidence/logs (never commit)
+evidence/
+
