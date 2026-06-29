@@ -3,6 +3,10 @@
 > **Token runway awareness for AI coding sessions.**  
 > A goose knows how far it can fly before it needs to land.
 
+<p align="center">
+  <img src="docs/assets/flightplan-logo.png" alt="Flightplan — token runway awareness for AI coding sessions" width="720">
+</p>
+
 ---
 
 ## What is Flightplan?
@@ -107,6 +111,10 @@ flightplan gate --model deepseek-v4-flash --provider OpenWork --work-type sprint
 
 ---
 
+![Flightplan usage flow](docs/assets/flightplan-usage-flow.png)
+
+---
+
 ## MCP Tools
 
 Flightplan registers five MCP tools. Detailed documentation with input schemas
@@ -207,9 +215,9 @@ There are three integration patterns, in order of preference:
 
 ### Pattern 1 — Native MCP
 
-If your client supports MCP, Flightplan plugs in directly. The three tools —
-`get_runway`, `session_start`, `record_session` — become callable from inside
-your session.
+If your client supports MCP, Flightplan plugs in directly. All five tools —
+`get_runway`, `session_start`, `record_session`, `estimate_work_runway`,
+`land_session` — become callable from inside your session.
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
@@ -500,7 +508,7 @@ npm run smoke:mcp
 # Build
 npm run build
 
-# Run all tests (239+ tests, all using in-memory DBs)
+# Run all tests (276 tests, all using in-memory DBs)
 npm test
 ```
 
@@ -529,10 +537,13 @@ User-set baseline. Agent self-reports. Goose Scale levels. Status CLI. MCP tools
 
 **FP-1 (v2 schema):** Librarian work-order tagging. `plan_id`, `work_order_id`, `work_session_id`, `agent`, and `outcome` fields on sessions. Auto-migration from v1 → v2.
 
-### Phase 2 — Dead Reckoning *(planned)*
-Velocity calculation from `usage_snapshots` history. Auto-calibrating baseline after 5 sessions. Real `burn_rate_per_hour` and `time_remaining_minutes`. Confidence scoring. Project-specific velocity profiles via `project_id`.
+### Phase 2a — Dead Reckoning Analytics ✅ *Shipped in v0.2.0*
+Historical token estimation (p50/p80/p95 from `usage_snapshots`). Auto-calibrating baseline after 5+ eligible sessions. Confidence scoring. Calibration eligibility filtering. Anomaly detection. Gate policy (proceed / proceed_with_checkpoint / split / land_first / refuse). Session receipt generation. Landing assessment with handoff templates.
 
-### Phase 3 — Formation Trust *(planned)*
+### Phase 2b — Velocity Fields *(next)*
+`burn_rate_per_hour` and `time_remaining_minutes` from active-work vs wall-clock duration. Project-specific velocity profiles via `project_id`. Provider/token-count fallback mode for agents without live token totals. Confidence intervals on estimates.
+
+### Phase 3 — Formation Trust *(future)*
 Community velocity profiles via Flock File. Opt-in anonymous session sharing. Formation Trust active state. HONK notes generated automatically.
 
 ---
