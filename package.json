@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsc",
     "smoke": "node scripts/smoke-test.js",
+    "smoke:mcp": "npx vitest run tests/mcp-tools.test.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsc --watch",
