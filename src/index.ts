@@ -233,6 +233,89 @@ server.tool(
   },
 );
 
+// ─── Tool: estimate_work_runway ────────────────────────────────────────────────
+
+/**
+ * Registers estimate_work_runway — estimates token runway for a proposed task.
+ * Combines Dead Reckoning history with gate policy to produce a decision.
+ */
+server.tool(
+  "estimate_work_runway",
+
+  "Estimate the token runway needed for a proposed work item and get a " +
+    "governed proceed/checkpoint/split/land decision. " +
+    "Call this before starting large tasks when you need to know if " +
+    "you have enough runway.",
+
+  {
+    project_id: z.string().optional().describe("Project identifier"),
+    plan_id: z.string().optional().describe('Plan ID (e.g. "Sprint-E")'),
+    work_order_id: z.string().optional().describe('Work Order ID (e.g. "A1")'),
+    work_session_id: z.string().optional().describe("Work Session ID"),
+    agent: z.string().optional().describe("Agent name"),
+    provider: z.string().optional().describe("AI provider"),
+    model: z.string().optional().describe("Model name"),
+    work_type: z.string().optional().describe("Type of work (e.g. sprint, refactor)"),
+    expected_scope: z.string().optional().describe("Expected scope description"),
+  },
+
+  async (params) => {
+    // Dynamic import to avoid circular deps at module level
+    const { evaluateGate } = await import('./analytics/gates.js');
+    const { openDb } = await import('./db/connection.js');
+    const db = openDb();
+    const result = evaluateGate(db, {
+      model: typeof params.model === "string" ? params.model : undefined,
+      provider: typeof params.provider === "string" ? params.provider : undefined,
+      project_id: typeof params.project_id === "string" ? params.project_id : undefined,
+      plan_id: typeof params.plan_id === "string" ? params.plan_id : undefined,
+      work_order_id: typeof params.work_order_id === "string" ? params.work_order_id : undefined,
+      work_session_id: typeof params.work_session_id === "string" ? params.work_session_id : undefined,
+      agent: typeof params.agent === "string" ? params.agent : undefined,
+      work_type: typeof params.work_type === "string" ? params.work_type : undefined,
+      expected_scope: typeof params.expected_scope === "string" ? params.expected_scope : undefined,
+    });
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+// ─── Tool: land_session ────────────────────────────────────────────────────────
+
+/**
+ * Registers land_session — governed session landing workflow.
+ * Assesses whether the session can safely continue or needs to land.
+ */
+server.tool(
+  "land_session",
+
+  "Assess the current session and determine whether it needs to land. " +
+    "Returns a landing recommendation, handoff template, and whether " +
+    "record_session can be called. Call this when HONK is detected or " +
+    "before ending work.",
+
+  {
+    tokens_total: z.number().optional().describe("Optional token total to record with landing"),
+    outcome: z.enum(["completed", "checkpointed", "stale", "blocked", "aborted", "honk"]).optional().describe("Session outcome"),
+  },
+
+  async (params) => {
+    const { assessLanding } = await import('./analytics/landing.js');
+    const { openDb } = await import('./db/connection.js');
+    const db = openDb();
+    const result = assessLanding(db, {
+      tokens_total: typeof params.tokens_total === "number" ? params.tokens_total : undefined,
+      outcome: typeof params.outcome === "string" ? params.outcome : undefined,
+    });
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
 // ─── Tool: record_session ─────────────────────────────────────────────────────
 
 /**

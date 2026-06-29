@@ -43,6 +43,16 @@ import {
   type GooseLevel,
 } from "./state/goose_scale.js";
 import { generateMarkdown } from "./state/state_generator.js";
+import {
+  cmdStats,
+  cmdCalibrationReport,
+  cmdCalibrationCandidates,
+  cmdAnomalies,
+  cmdEstimate,
+  cmdGate,
+  cmdReceipt,
+  cmdLand,
+} from "./commands.js";
 
 // ─── ANSI colour helpers ──────────────────────────────────────────────────────
 
@@ -523,9 +533,94 @@ function main(): void {
     : path.resolve("RUNWAY_STATE.md"); // default: current working directory
 
   try {
+    // ─── Route to new commands ──────────────────────────────────────────────
+    if (command === "stats") {
+      cmdStats(useJson);
+      return;
+    }
+
+    if (command === "calibration") {
+      const sub = args[1];
+      if (sub === "report") {
+        cmdCalibrationReport(useJson);
+      } else if (sub === "candidates") {
+        cmdCalibrationCandidates(useJson);
+      } else {
+        cmdCalibrationReport(useJson);
+      }
+      return;
+    }
+
+    if (command === "anomalies") {
+      cmdAnomalies(useJson);
+      return;
+    }
+
+    if (command === "estimate") {
+      const modelIdx = args.indexOf("--model");
+      const providerIdx = args.indexOf("--provider");
+      const projectIdx = args.indexOf("--project");
+      const model = modelIdx !== -1 ? args[modelIdx + 1] : undefined;
+      const provider = providerIdx !== -1 ? args[providerIdx + 1] : undefined;
+      const project = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+
+      if (!model || !provider) {
+        console.error("Usage: flightplan estimate --model <model> --provider <provider> [--project <project>]");
+        process.exit(1);
+      }
+      cmdEstimate(model, provider, project, useJson);
+      return;
+    }
+
+    if (command === "gate") {
+      const modelIdx = args.indexOf("--model");
+      const providerIdx = args.indexOf("--provider");
+      const projectIdx = args.indexOf("--project");
+      const workTypeIdx = args.indexOf("--work-type");
+      const model = modelIdx !== -1 ? args[modelIdx + 1] : undefined;
+      const provider = providerIdx !== -1 ? args[providerIdx + 1] : undefined;
+      const project = projectIdx !== -1 ? args[projectIdx + 1] : undefined;
+      const workType = workTypeIdx !== -1 ? args[workTypeIdx + 1] : undefined;
+
+      if (!model || !provider) {
+        console.error("Usage: flightplan gate --model <model> --provider <provider> [--project <project>] [--work-type <type>]");
+        process.exit(1);
+      }
+      cmdGate(model, provider, project, workType, useJson);
+      return;
+    }
+
+    if (command === "receipt") {
+      const sessionIdx = args.indexOf("--session");
+      const hasLast = args.includes("--last");
+      const sessionId = sessionIdx !== -1 ? args[sessionIdx + 1] : undefined;
+      const outPathReceipt = outFlagValue ? path.resolve(outFlagValue) : undefined;
+
+      if (!sessionId && !hasLast) {
+        console.error("Usage: flightplan receipt --last [--json] [--out <path>]");
+        console.error("       flightplan receipt --session <session_id> [--json]");
+        process.exit(1);
+      }
+      cmdReceipt(sessionId, outPathReceipt, useJson);
+      return;
+    }
+
+    if (command === "land") {
+      const tokensIdx = args.indexOf("--tokens-total");
+      const outcomeIdx = args.indexOf("--outcome");
+      const tokensTotal = tokensIdx !== -1 ? parseInt(args[tokensIdx + 1] ?? '', 10) : undefined;
+      const outcome = outcomeIdx !== -1 ? args[outcomeIdx + 1] : undefined;
+
+      cmdLand(
+        isNaN(tokensTotal as number) ? undefined : tokensTotal,
+        outcome,
+        useJson,
+      );
+      return;
+    }
+
+    // ─── Legacy commands ────────────────────────────────────────────────────
     // Gather data once — all three output paths consume the same object.
-    // This replaces the duplicated DB reads that previously lived in
-    // printStatus() and printJson() separately (Tier 2.6).
     const data = gatherStatusData();
 
     if (command === "export") {
