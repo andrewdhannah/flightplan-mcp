@@ -50,33 +50,25 @@ Eight flight states covering the full session lifecycle:
 ### Install
 
 ```bash
-npm install -g flightplan-mcp
+git clone https://github.com/andrewdhannah/flightplan-mcp.git
+cd flightplan-mcp
+nvm use 20
+npm install
+npm run build
+npm run smoke
+npm link                    # makes `flightplan` available globally
 ```
+
+See [docs/INSTALL.md](docs/INSTALL.md) for detailed install instructions,
+including MCP client configuration for Claude Desktop, Codex, and OpenWork.
 
 ### Initialize
 
 ```bash
-npx flightplan-mcp init
+flightplan-mcp init
 ```
 
 Three questions. 30 seconds. Done.
-
-### Register with your AI tool
-
-Add to `claude_desktop_config.json` (usually at `~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "flightplan": {
-      "command": "npx",
-      "args": ["flightplan-mcp"]
-    }
-  }
-}
-```
-
-For other tools, point them at: `npx flightplan-mcp`
 
 ### Check your runway
 
@@ -98,70 +90,71 @@ flightplan status
     Nominal burn rate. Runway estimate is reliable.
 
   Dead Reckoning
-    3 sessions archived  ·  2 more until baseline auto-calibrates
+     3 sessions archived  ·  2 more until baseline auto-calibrates
+```
+
+### Estimate runway for a task
+
+```bash
+flightplan estimate --model deepseek-v4-flash --provider OpenWork --json
+```
+
+### Check gate decision before expensive work
+
+```bash
+flightplan gate --model deepseek-v4-flash --provider OpenWork --work-type sprint --json
 ```
 
 ---
 
 ## MCP Tools
 
-Three tools the agent calls. No parameters required for `get_runway()`.
+Flightplan registers five MCP tools. Detailed documentation with input schemas
+and examples: [docs/MCP-TOOLS.md](docs/MCP-TOOLS.md)
+
+| Tool | Purpose | Mutates DB |
+|---|---|---|
+| `get_runway()` | Check current token runway state | No |
+| `session_start(...)` | Open a new tracking session | Yes |
+| `record_session(...)` | Archive session data and close | Yes |
+| `estimate_work_runway(...)` | Estimate runway + governed decision | No |
+| `land_session(...)` | Assess landing requirements | No |
 
 ### `get_runway()`
 
-Check current token runway state. Call this at session start and before any high-cost operation.
+Check current token runway state. Call at session start and before any
+high-cost operation. No parameters required.
 
 ```json
 {
   "level": "CRUISING",
   "window_remaining_pct": 52,
   "window_remaining_tokens": 19200,
-  "token_range": { "low": 19200, "high": 19200 },
-  "burn_rate_per_hour": 0,
-  "time_remaining_minutes": 0,
+  "token_range": null,
+  "burn_rate_per_hour": null,
+  "time_remaining_minutes": null,
   "data_source": "agent_report",
   "formation_trust": "observer",
   "recommended_action": "Runway is healthy. Proceed with planned work."
 }
 ```
 
-If the session is tagged with Librarian work-order metadata, those tags are echoed in the response:
+### `session_start(provider?, model?, project_id?, ...)`
 
-```json
-{
-  "level": "CRUISING",
-  "window_remaining_pct": 52,
-  "plan_id": "Sprint-E",
-  "work_order_id": "A1",
-  "work_session_id": "sess_A1_001",
-  "agent": "OpenWork-Claude"
-}
-```
-
-### `session_start(provider?, model?, project_id?, plan_id?, work_order_id?, work_session_id?, agent?)`
-
-Open a new tracking session. Call at the beginning of each working session.
-
-**FP-1 work tags** (`plan_id`, `work_order_id`, `work_session_id`, `agent`) enable integration with The Librarian's Work Order system — tagging sessions for project tracking and cross-session correlation.
+Open a new tracking session. All parameters optional.
 
 ```json
 {
   "session_id": "a1b2c3d4-...",
   "started_at": "2026-05-04T19:30:00.000Z",
   "level": "REFUELLED",
-  "message": "Session started. Runway restored.",
-  "plan_id": "Sprint-E",
-  "work_order_id": "A1"
+  "message": "Session started. Runway restored."
 }
 ```
 
-### `record_session(tokens_total, notes?, outcome?, project_id?, plan_id?, work_order_id?, work_session_id?, agent?)`
+### `record_session(tokens_total, notes?, outcome?, ...)`
 
-Archive session data and close the session. Call at session end with your final token count.
-
-**FP-1 additions:**
-- `outcome` — one of `completed`, `checkpointed`, `stale`, `blocked`, `aborted`, `honk`
-- Work tags — override or set tags at session end (they default to values from `session_start`)
+Archive session data and close the session. `tokens_total` is required.
 
 ```json
 {
@@ -171,9 +164,37 @@ Archive session data and close the session. Call at session end with your final 
   "final_level": "HEADWIND",
   "sessions_archived": 4,
   "outcome": "completed",
-  "work_order_id": "A1",
-  "work_session_id": "sess_A1_001",
-  "message": "Session archived. 28,500 tokens over 47.3 minutes. Outcome: completed. Dead Reckoning unlocks in 1 more session."
+  "message": "Session archived. 28,500 tokens over 47.3 minutes."
+}
+```
+
+### `estimate_work_runway(model?, provider?, project_id?, work_type?, ...)`
+
+Estimate token runway for a proposed task. Combines Dead Reckoning historical
+data with gate policy. Returns a governed decision.
+
+```json
+{
+  "decision": "proceed",
+  "confidence": "medium",
+  "estimated_tokens": { "p50": 18000, "p80": 45000, "p95": 85000 },
+  "goose_level": "PREFLIGHT",
+  "recommended_action": "Normal work allowed. Monitor runway and re-evaluate before major operations.",
+  "policy_reasons": ["No active session — using conservative estimate"]
+}
+```
+
+### `land_session(tokens_total?, outcome?)`
+
+Assess whether the session needs to land. Returns landing recommendation,
+handoff template, and whether `record_session` can be called.
+
+```json
+{
+  "level": "PREFLIGHT",
+  "landing_required": false,
+  "can_record": false,
+  "recommended_action": "No active session. Call session_start() to begin tracking."
 }
 ```
 
@@ -289,9 +310,10 @@ Whichever pattern you use, the same three call points apply:
 ```
 flightplan-mcp/
 ├── src/
-│   ├── index.ts              ← MCP server entry point
+│   ├── index.ts              ← MCP server entry point (5 tools)
 │   ├── cli.ts                ← flightplan-mcp init wizard
-│   ├── status.ts             ← flightplan status CLI
+│   ├── status.ts             ← flightplan status CLI + command routing
+│   ├── commands.ts           ← CLI command handlers (stats, gate, etc.)
 │   ├── types.ts              ← shared TypeScript interfaces
 │   ├── db/
 │   │   ├── paths.ts          ← cross-platform DB path (~/.flightplan/)
@@ -301,6 +323,16 @@ flightplan-mcp/
 │   │   ├── get_runway.ts     ← MCP tool: check runway state
 │   │   ├── session_start.ts  ← MCP tool: open tracking session
 │   │   └── record_session.ts ← MCP tool: archive session data
+│   ├── analytics/
+│   │   ├── stats.ts          ← aggregate usage statistics
+│   │   ├── calibration.ts    ← calibration eligibility rules
+│   │   ├── anomalies.ts      ← anomaly detection
+│   │   ├── dead_reckoning.ts ← historical token estimation
+│   │   ├── gates.ts          ← governed proceed/split/land decisions
+│   │   ├── receipts.ts       ← session receipt generation
+│   │   ├── landing.ts        ← landing assessment with handoff
+│   │   ├── percentiles.ts    ← p50/p80/p95 calculation
+│   │   └── types.ts          ← shared analytics types
 │   └── state/
 │       ├── goose_scale.ts    ← 8 flight states + level calculation
 │       └── state_generator.ts ← RUNWAY_STATE.md Markdown snapshot generator
@@ -388,7 +420,84 @@ or delete it at any time.
 
 ---
 
-## Roadmap
+## CLI Commands
+
+Full CLI reference: [docs/CLI.md](docs/CLI.md)
+
+| Command | Description |
+|---|---|
+| `flightplan status` | Show current runway state |
+| `flightplan stats` | Show aggregate usage statistics |
+| `flightplan calibration report` | Calibration eligibility report |
+| `flightplan calibration candidates` | List calibration-eligible sessions |
+| `flightplan anomalies` | Detect anomalous sessions |
+| `flightplan estimate` | Estimate token runway for a task |
+| `flightplan gate` | Check governed runway decision |
+| `flightplan receipt` | Export session receipt |
+| `flightplan land` | Assess landing status |
+| `flightplan export` | Write RUNWAY_STATE.md for any LLM |
+
+All commands support `--json` for machine-readable output and `--help`
+for command-specific help. Exit codes: 0 (success), 1 (error).
+
+---
+
+## Goose Scale Policy
+
+Eight flight states governing agent behaviour:
+
+| Level | Allowance | Action |
+|---|---|---|
+| `PREFLIGHT` | No active session | Call `session_start()` |
+| `CRUISING` | Normal work allowed | Proceed |
+| `HEADWIND` | Continue, no scope expansion | Finish current task |
+| `TURBULENCE` | Checkpoint before expensive work | Wrap up soon |
+| `HONK` | Land immediately | Call `record_session()` now |
+| `LANDING` | Handoff/receipt only | Session ended |
+| `REFUELLED` | New session started | Runway restored |
+| `WAYWARD` | Calibration low, use conservative fallback | Dead Reckoning drifted |
+
+The gate policy combines Goose Level with Dead Reckoning estimates to produce
+guarded decisions: `proceed`, `proceed_with_checkpoint`, `split`,
+`land_first`, or `refuse`.
+
+---
+
+## Testing
+
+```bash
+# Smoke test — verify dependencies and DB schema
+npm run smoke
+
+# MCP tool registration and schema validation
+npm run smoke:mcp
+
+# Build
+npm run build
+
+# Run all tests (239+ tests, all using in-memory DBs)
+npm test
+```
+
+All tests use **in-memory SQLite databases** — they never touch the live DB
+at `~/.flightplan/flightplan.db`. The `FLIGHTPLAN_DB_PATH` environment
+variable is available for redirecting the DB path in custom test scenarios.
+
+---
+
+## Privacy
+
+Flightplan is local-first by design. Detailed privacy boundary:
+[docs/FLIGHTPLAN-PRIVACY-BOUNDARY.md](docs/FLIGHTPLAN-PRIVACY-BOUNDARY.md)
+
+- **No telemetry.** Zero network requests, no cloud sync, no analytics.
+- **No conversation content.** Prompts, code, and agent responses are never stored.
+- **Local DB only.** `~/.flightplan/flightplan.db` stays on your machine.
+- **Notes excluded from receipts.** The optional `notes` field is agent-controlled
+  freeform text stored in the DB but excluded from receipts by default.
+- **No secrets stored.** Project IDs and work tags are metadata, not content.
+
+---
 
 ### Phase 1 — Static Baseline ✅ *Current*
 User-set baseline. Agent self-reports. Goose Scale levels. Status CLI. MCP tools.
@@ -415,8 +524,14 @@ npm install
 # Verify dependencies
 npm run smoke
 
+# Verify MCP tools register correctly
+npm run smoke:mcp
+
 # Build
 npm run build
+
+# Run all tests (in-memory DBs only)
+npm test
 
 # Initialize your own DB
 npm run init
@@ -425,7 +540,14 @@ npm run init
 node dist/status.js
 ```
 
-**Node version:** Flightplan requires Node 18–22. Node 23+ cannot compile the native SQLite dependencies. Use `nvm` to manage versions — a `.nvmrc` is included.
+**Node version:** Flightplan requires Node 18–22. Node 23+ cannot compile
+the native SQLite dependencies. Use `nvm` to manage versions — a `.nvmrc`
+is included.
+
+**Test safety:** All tests use in-memory SQLite databases. They never touch
+the live DB at `~/.flightplan/flightplan.db`. You can set the
+`FLIGHTPLAN_DB_PATH` environment variable to redirect the DB for testing
+or development purposes.
 
 ---
 
