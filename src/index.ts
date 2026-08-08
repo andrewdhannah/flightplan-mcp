@@ -103,7 +103,7 @@ import { recordSession, type SessionOutcome } from "./tools/record_session.js";
  */
 const server = new McpServer({
   name: "flightplan",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 // ─── Tool: get_runway ─────────────────────────────────────────────────────────

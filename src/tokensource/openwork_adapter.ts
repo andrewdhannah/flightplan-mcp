@@ -73,10 +73,6 @@ export class OpenWorkAdapter implements TokenSource {
     };
   }
 
-  readonly source_id = 'openwork';
-  readonly name = 'OpenWork';
-  readonly version = '1.0.0';
-
   /**
    * Fetch token usage from OpenWork API.
    */

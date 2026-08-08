@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flightplan.dev/schemas/session-receipt-v1",
+  "title": "FlightPlan Session Receipt",
+  "description": "Receipt for a completed FlightPlan session. Records token usage, outcome, and provenance.",
+  "type": "object",
+  "required": ["receipt_id", "receipt_type", "session_id", "tokens_total", "outcome", "recorded_at", "authority_provenance"],
+  "properties": {
+    "receipt_id": {
+      "type": "string",
+      "description": "Unique receipt ID"
+    },
+    "receipt_type": {
+      "type": "string",
+      "const": "SESSION_RECEIPT",
+      "description": "Type of receipt"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session ID this receipt covers"
+    },
+    "tokens_total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total tokens consumed in the session"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["completed", "checkpointed", "stale", "blocked", "aborted", "honk"],
+      "description": "Session outcome"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the receipt was recorded"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional notes about the session"
+    },
+    "project_id": {
+      "type": "string",
+      "description": "Optional project tag"
+    },
+    "plan_id": {
+      "type": "string",
+      "description": "Optional FP-1 plan ID"
+    },
+    "work_order_id": {
+      "type": "string",
+      "description": "Optional FP-1 Work Order ID"
+    },
+    "work_session_id": {
+      "type": "string",
+      "description": "Optional FP-1 Work Session ID"
+    },
+    "agent": {
+      "type": "string",
+      "description": "Optional agent name"
+    },
+    "authority_provenance": {
+      "$ref": "authority-provenance.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

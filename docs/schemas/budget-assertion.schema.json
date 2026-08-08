@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flightplan.dev/schemas/budget-assertion-v1",
+  "title": "FlightPlan Budget Assertion",
+  "description": "Calibration assertion recording estimate accuracy for a work profile. Used for improving future estimates.",
+  "type": "object",
+  "required": ["profile_id", "work_type", "samples", "estimate_error_percent", "confidence", "asserted_at", "authority_provenance"],
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "description": "Work profile ID this assertion applies to"
+    },
+    "work_type": {
+      "type": "string",
+      "enum": ["documentation", "analysis", "code_change", "debugging", "architecture_review", "validation", "migration"],
+      "description": "Work classification for calibration"
+    },
+    "samples": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of historical observations used"
+    },
+    "estimate_error_percent": {
+      "type": "number",
+      "description": "Estimate error percentage (positive = overestimate, negative = underestimate)"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["HIGH", "MEDIUM", "LOW", "NONE"],
+      "description": "Confidence in this calibration assertion"
+    },
+    "asserted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this assertion was recorded"
+    },
+    "authority_provenance": {
+      "$ref": "authority-provenance.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

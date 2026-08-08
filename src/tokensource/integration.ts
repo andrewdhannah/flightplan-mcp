@@ -1,7 +1,8 @@
 /**
- * src/tokensource/registry.ts — TokenSource Registry Implementation
+ * src/tokensource/integration.ts — TokenSource Integration Layer
  *
- * Manages multiple TokenSource instances and provides unified access.
+ * Provides a unified API for FlightPlan to interact with TokenSources.
+ * Re-exports and wraps the core types and registry implementation.
  */
 
 import type {
@@ -10,42 +11,16 @@ import type {
   TokenScope,
   TokenUsage,
   HealthStatus,
-  InMemoryTokenSourceRegistry,
+  TokenObservationReceipt,
 } from './types.js';
 
-import { InMemoryTokenSourceRegistry as RegistryImpl, getTokenSourceRegistry as getRegistry, setTokenSourceRegistry } from './types.js';
+import {
+  getTokenSourceRegistry,
+  setTokenSourceRegistry,
+  InMemoryTokenSourceRegistry as RegistryImpl,
+} from './types.js';
 
 import { OpenWorkAdapter, createOpenWorkAdapterFromEnv } from './openwork_adapter.js';
-
-/**
- * Global singleton registry instance.
- */
-let _registry: InMemoryTokenSourceRegistry | null = null;
-
-/**
- * Get the global TokenSource registry instance.
- * Creates it on first access if not already initialized.
- */
-export function getTokenSourceRegistry(): InMemoryTokenSourceRegistry {
-  if (!_registry) {
-    _registry = new InMemoryTokenSourceRegistry();
-  }
-  return _registry;
-}
-
-/**
- * Set a custom registry instance (for testing).
- */
-export function setTokenSourceRegistry(registry: InMemoryTokenSourceRegistry): void {
-  _registry = registry;
-}
-
-/**
- * Get the global registry instance (alias for getTokenSourceRegistry).
- */
-export function getTokenSourceRegistryInstance(): InMemoryTokenSourceRegistry {
-  return getTokenSourceRegistry();
-}
 
 /**
  * Initialize the TokenSource registry with default sources.
@@ -145,34 +120,6 @@ export function removeTokenSource(sourceId: string): boolean {
 }
 
 /**
- * Get a TokenSource by ID.
- */
-export function getTokenSourceById(sourceId: string): TokenSource | undefined {
-  return getTokenSource(sourceId);
-}
-
-/**
- * List all registered TokenSources.
- */
-export function listTokenSources(): TokenSource[] {
-  return listTokenSources();
-}
-
-/**
- * Fetch token usage from all sources for a given scope.
- */
-export async function fetchTokenUsageFromAllSources(scope: TokenScope): Promise<Map<string, TokenUsage>> {
-  return fetchAllTokenUsage(scope);
-}
-
-/**
- * Health check all registered token sources.
- */
-export async function checkAllTokenSourcesHealth(): Promise<Map<string, HealthStatus>> {
-  return healthCheckAllTokenSources();
-}
-
-/**
  * Initialize the TokenSource system with default configuration.
  * This is the main entry point for applications.
  */
@@ -194,7 +141,7 @@ export async function shutdownTokenSources(): Promise<void> {
       }
     }
   }
-  _registry = null;
+  setTokenSourceRegistry(new RegistryImpl());
 }
 
 // Re-export types for convenience
@@ -214,7 +161,6 @@ export {
 } from './openwork_adapter.js';
 
 export {
-  InMemoryTokenSourceRegistry,
   getTokenSourceRegistry,
   setTokenSourceRegistry,
 } from './types.js';

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flightplan.dev/schemas/runway-state-v1",
+  "title": "FlightPlan Runway State",
+  "description": "Runway state export from FlightPlan. Contains Goose Scale level, remaining tokens, and recommended action.",
+  "type": "object",
+  "required": ["level", "remainingTokens", "recommendedAction", "sessionCount", "gooseScale", "authority_provenance"],
+  "properties": {
+    "level": {
+      "type": "string",
+      "enum": ["CRUISING", "DESCENT", "APPROACH", "FINAL", "HONK"],
+      "description": "Goose Scale level"
+    },
+    "remainingTokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Remaining token budget"
+    },
+    "recommendedAction": {
+      "type": "string",
+      "enum": ["proceed", "checkpoint", "split", "land"],
+      "description": "Recommended action based on runway state"
+    },
+    "sessionCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of sessions in current baseline window"
+    },
+    "baselineTokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Baseline token estimate"
+    },
+    "warningThreshold": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Warning threshold in tokens"
+    },
+    "gooseScale": {
+      "type": "object",
+      "required": ["level", "name", "description"],
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "authority_provenance": {
+      "$ref": "authority-provenance.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

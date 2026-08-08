@@ -1,5 +1,5 @@
 # FlightPlan Runway State
-**Generated:** 2026-05-06T03:54:14.730Z
+**Generated:** 2026-07-30T17:41:20.916Z
 **Source:** `flightplan export` (Flightplan v0.1.0)
 **Provider:** Claude Code
 
@@ -47,15 +47,15 @@ To begin tracking: call `session_start()` in your AI tool.
 
 ## 3. Dead Reckoning Status
 
-- **Sessions Archived:** 1
-- **Phase 2 Status:** ⏳ Unlocks in 4 more sessions
+- **Sessions Archived:** 217
+- **Phase 2 Status:** ✅ Active — baseline is auto-calibrating from real session data
 
 **Currently unavailable (Phase 1 — returns null):**
 - `burn_rate_per_hour` — requires 5+ archived sessions
 - `time_remaining_minutes` — derived from burn rate
 - `token_range` — confidence interval from session variance
 
-These fields activate automatically after 4 more completed sessions.
+These fields activate automatically after 0 more completed sessions.
 
 ## 4. How To Use This File
 
@@ -88,6 +88,6 @@ implementations or ask about them unless the user raises them first:
 
 ---
 
-> **Snapshot taken at 2026-05-06T03:54:14.730Z.**
+> **Snapshot taken at 2026-07-30T17:41:20.916Z.**
 > Re-export before long tasks, refactors, or multi-step operations.
 > Run `flightplan export` to get fresh data.

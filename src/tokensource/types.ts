@@ -5,9 +5,21 @@
  * to consume token data from external sources (OpenWork, etc.).
  */
 
-import type { HealthStatus } from './types.js';
-
 // ─── TokenScope ──────────────────────────────────────────────────────────────
+
+/**
+ * Health status for a token source.
+ */
+export interface HealthStatus {
+  /** Whether the source is healthy */
+  healthy: boolean;
+  /** Latency in milliseconds (optional) */
+  latency_ms?: number;
+  /** Error message if unhealthy (optional) */
+  error?: string;
+  /** Additional details (optional) */
+  details?: Record<string, unknown>;
+}
 
 /**
  * Defines the scope of token usage to fetch.

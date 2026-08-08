@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flightplan.dev/schemas/token-observation-v1",
+  "title": "FlightPlan Token Observation Receipt",
+  "description": "Receipt for a token observation from a TokenSource. Stored in receipts/token-observations/.",
+  "type": "object",
+  "required": ["receipt_id", "receipt_type", "source_id", "scope", "usage", "observed_at", "adapter_version", "health_status", "integrity_hash", "schema_version", "authority_provenance"],
+  "properties": {
+    "receipt_id": {
+      "type": "string",
+      "description": "Unique receipt ID"
+    },
+    "receipt_type": {
+      "type": "string",
+      "const": "TOKEN_OBSERVATION",
+      "description": "Type of receipt"
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Token source that produced this observation"
+    },
+    "scope": {
+      "type": "object",
+      "description": "Scope of the observation",
+      "required": ["scope_type", "scope_id"],
+      "properties": {
+        "scope_type": {
+          "type": "string",
+          "enum": ["session", "project", "organization", "global"]
+        },
+        "scope_id": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "description": "Token usage observed",
+      "required": ["tokens_consumed"],
+      "properties": {
+        "tokens_consumed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokens_remaining": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokens_limit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "breakdown": {
+          "type": "object",
+          "properties": {
+            "by_model": {
+              "type": "object",
+              "additionalProperties": { "type": "integer", "minimum": 0 }
+            },
+            "by_provider": {
+              "type": "object",
+              "additionalProperties": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the observation"
+    },
+    "adapter_version": {
+      "type": "string",
+      "description": "Adapter version that produced this observation"
+    },
+    "health_status": {
+      "type": "string",
+      "enum": ["healthy", "degraded", "unhealthy"],
+      "description": "Health status at time of observation"
+    },
+    "integrity_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Integrity hash of the receipt content"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version"
+    },
+    "authority_provenance": {
+      "$ref": "authority-provenance.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flightplan.dev/schemas/authority-provenance-v1",
+  "title": "FlightPlan Authority Provenance",
+  "description": "Authority provenance chain for FlightPlan receipts. Defines the authority relationship between observation source, decision owner, consumer, and transformation chain. Includes contract lineage for governance traceability.",
+  "type": "object",
+  "required": ["decisionOwner", "consumer", "observationSource", "localTransforms", "schemaVersion", "contract", "validationProfile"],
+  "properties": {
+    "decisionOwner": {
+      "type": "string",
+      "description": "The component that owns the decision semantics (e.g., 'flightplan-mcp')."
+    },
+    "consumer": {
+      "type": "string",
+      "description": "The component consuming the observation (e.g., 'librarian')."
+    },
+    "observationSource": {
+      "type": "string",
+      "description": "The component that produced the observation (e.g., 'flightplan-mcp', 'openwork')."
+    },
+    "localTransforms": {
+      "type": "array",
+      "description": "Ordered chain of local transformations applied by the consumer.",
+      "items": {
+        "type": "string",
+        "enum": ["none", "schema_translation_only", "normalization", "aggregation", "derivation", "override"]
+      },
+      "minItems": 0
+    },
+    "schemaVersion": {
+      "type": "string",
+      "description": "Version of the work profile schema (e.g., 'work-profile-v1')."
+    },
+    "contract": {
+      "type": "string",
+      "description": "Governing contract ID (e.g., 'FLIGHTPLAN-AUTHORITY-BOUNDARY-CONTRACT-001').",
+      "pattern": "^FLIGHTPLAN-[A-Z-]+-CONTRACT-\\d+$"
+    },
+    "validationProfile": {
+      "type": "string",
+      "description": "FP-PROV ruleset version applied (e.g., 'FP-PROV-v1').",
+      "pattern": "^FP-PROV-v\\d+$"
+    }
+  },
+  "additionalProperties": false
+}
