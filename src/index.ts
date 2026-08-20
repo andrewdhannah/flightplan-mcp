@@ -93,6 +93,7 @@ import { z } from "zod";
 import { getRunway } from "./tools/get_runway.js";
 import { sessionStart } from "./tools/session_start.js";
 import { recordSession, type SessionOutcome } from "./tools/record_session.js";
+import { registerObservationTool } from "./observations/tool.js";
 
 // ─── Server definition ────────────────────────────────────────────────────────
 
@@ -394,6 +395,17 @@ server.tool(
     };
   },
 );
+
+// ─── Tool: emit_observation ────────────────────────────────────────────────────
+
+/**
+ * Registers emit_observation — structured RuntimeResourceObservation emission.
+ * This is the sensor side of the sensor→authority bridge.
+ *
+ * FlightPlan produces observations. Librarian decides what to do with them.
+ * Does not persist — Librarian handles evidence storage.
+ */
+registerObservationTool(server);
 
 // ─── Start server ─────────────────────────────────────────────────────────────
 
