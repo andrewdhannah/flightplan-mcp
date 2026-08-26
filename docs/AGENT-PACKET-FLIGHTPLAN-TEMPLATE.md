@@ -37,6 +37,15 @@ Calibration confidence:     <high|medium|low|wayward>
 Allowed action:             <description>
 Restrictions:               <any restrictions>
 ```
+
+### If governance integration is available:
+
+```
+emit_observation(work_packet_id="<wp-id>", work_order_id="<wo-id>")
+```
+
+This returns a RuntimeResourceObservation for the governance system.
+Flightplan produces it; the governance system decides what to do with it.
 ```
 
 ---
@@ -153,8 +162,9 @@ Save the following artifacts for the closeout report:
 3. `flightplan receipt --last --json` output (session receipt)
 4. `flightplan stats --json` output (final aggregate stats)
 5. `flightplan calibration report --json` output (data quality)
+6. `emit_observation(...)` output (if governance integration is active)
 
-These five JSON documents form the complete FlightPlan evidence record
+These JSON documents form the complete FlightPlan evidence record
 for any session. They are deterministic, machine-readable, and safe to
 commit or share (no secrets, no prompts, no conversation content).
 ```

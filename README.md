@@ -13,7 +13,9 @@
 
 Flightplan is a local-first MCP (Model Context Protocol) server that gives AI coding agents **token runway awareness**. Before starting a large refactor, generating a complex component, or any high-cost operation, the agent calls `get_runway()` and knows whether it has enough runway to proceed — or whether it should wrap up and land first.
 
-No cloud. No subscriptions. No provider lock-in. One SQLite file in `~/.flightplan/`.
+Flightplan also provides a **runtime observation layer** — structured sensor output that captures actual token consumption, estimate variance, and recommended actions. This observation interface is designed for integration with governance systems (like the Librarian) that consume evidence and make authority decisions.
+
+One SQLite file in `~/.flightplan/`. Optional token source adapters (e.g. OpenWork) can connect to external telemetry when available.
 
 ---
 
@@ -41,11 +43,16 @@ Eight flight states covering the full session lifecycle:
 | `PREFLIGHT` | No session active — waiting for `session_start()` | — |
 | `CRUISING` | Nominal burn. Runway estimate is reliable. | 0–50% |
 | `HEADWIND` | Burning faster than baseline. Still on course. | 50–75% |
-| `TURBULENCE` | Tight runway. Wrap up soon. | 75–90% |
-| `HONK` | Runway exhausted. Call `record_session()` now. | 90%+ |
+| `TURBULENCE` | Tight runway. Wrap up soon. | 75–85% |
+| `HONK` | Runway exhausted. Call `record_session()` now. | 85%+ |
 | `LANDING` | Session ended gracefully. Data archived. | — |
 | `REFUELLED` | New session started. Runway restored. | — |
-| `WAYWARD` | Dead Reckoning drifted significantly. *(Phase 2)* | — |
+| `WAYWARD` | Dead Reckoning drifted significantly. | — |
+
+HONK fires at 85% (not 90%) deliberately. The configured baseline is an
+estimate, not a hard wall. The 15% margin gives the agent enough room to
+finish a thought, write `record_session()`, and land cleanly instead of
+cutting off mid-sentence.
 
 ---
 
@@ -117,7 +124,7 @@ flightplan gate --model deepseek-v4-flash --provider OpenWork --work-type sprint
 
 ## MCP Tools
 
-Flightplan registers five MCP tools. Detailed documentation with input schemas
+Flightplan registers six MCP tools. Detailed documentation with input schemas
 and examples: [docs/MCP-TOOLS.md](docs/MCP-TOOLS.md)
 
 | Tool | Purpose | Mutates DB |
@@ -127,6 +134,7 @@ and examples: [docs/MCP-TOOLS.md](docs/MCP-TOOLS.md)
 | `record_session(...)` | Archive session data and close | Yes |
 | `estimate_work_runway(...)` | Estimate runway + governed decision | No |
 | `land_session(...)` | Assess landing requirements | No |
+| `emit_observation(...)` | Structured runtime resource observation | No |
 
 ### `get_runway()`
 
@@ -206,6 +214,48 @@ handoff template, and whether `record_session` can be called.
 }
 ```
 
+### `emit_observation(session_id?, work_packet_id?, work_order_id?, model?, provider?, project?)`
+
+Emit a structured RuntimeResourceObservation — a sensor snapshot of current
+token consumption, Dead Reckoning estimate, and variance classification.
+This is Flightplan's observation interface for governance systems (like the
+Librarian) that consume evidence and make authority decisions.
+
+Flightplan produces the observation; it does not persist it (the consumer
+decides what to do with it) and does not make policy decisions.
+
+```json
+{
+  "observation_id": "OBS-m1abc2-def123",
+  "observation_type": "runtime_resource",
+  "session_id": "a1b2c3d4-...",
+  "timestamp": "2026-08-25T12:00:00.000Z",
+  "model_identity": {
+    "provider": "OpenWork",
+    "model": "claude-sonnet-4-6"
+  },
+  "consumed": {
+    "tokens_observed": 12000,
+    "goose_level": "CRUISING",
+    "elapsed_minutes": 15.2
+  },
+  "estimate": {
+    "estimator_id": "token-cost-estimator-v1",
+    "confidence": "medium",
+    "percentiles": { "p50": 18000, "p80": 45000, "p95": 85000 },
+    "sample_count": 10,
+    "match_scope": "provider_model"
+  },
+  "variance": {
+    "state": "NOMINAL",
+    "pct_of_p50": 66.7,
+    "pct_of_p80": 26.7,
+    "remaining_tokens": 28000
+  },
+  "recommended_action": "Consumption is within expected range. Proceed normally."
+}
+```
+
 ---
 
 ## Using Flightplan with Other Tools
@@ -215,9 +265,9 @@ There are three integration patterns, in order of preference:
 
 ### Pattern 1 — Native MCP
 
-If your client supports MCP, Flightplan plugs in directly. All five tools —
+If your client supports MCP, Flightplan plugs in directly. All six tools —
 `get_runway`, `session_start`, `record_session`, `estimate_work_runway`,
-`land_session` — become callable from inside your session.
+`land_session`, `emit_observation` — become callable from inside your session.
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
@@ -343,7 +393,7 @@ FlightPlan Landing: land + record_session + receipt + stats + calibration report
 ```
 flightplan-mcp/
 ├── src/
-│   ├── index.ts              ← MCP server entry point (5 tools)
+│   ├── index.ts              ← MCP server entry point (6 tools)
 │   ├── cli.ts                ← flightplan-mcp init wizard
 │   ├── status.ts             ← flightplan status CLI + command routing
 │   ├── commands.ts           ← CLI command handlers (stats, gate, etc.)
@@ -360,15 +410,25 @@ flightplan-mcp/
 │   │   ├── stats.ts          ← aggregate usage statistics
 │   │   ├── calibration.ts    ← calibration eligibility rules
 │   │   ├── anomalies.ts      ← anomaly detection
-│   │   ├── dead_reckoning.ts ← historical token estimation
+│   │   ├── dead_reckoning.ts ← historical token estimation (p50/p80/p95)
 │   │   ├── gates.ts          ← governed proceed/split/land decisions
 │   │   ├── receipts.ts       ← session receipt generation
 │   │   ├── landing.ts        ← landing assessment with handoff
 │   │   ├── percentiles.ts    ← p50/p80/p95 calculation
+│   │   ├── variance.ts       ← estimate-vs-actual variance classification
 │   │   └── types.ts          ← shared analytics types
-│   └── state/
-│       ├── goose_scale.ts    ← 8 flight states + level calculation
-│       └── state_generator.ts ← RUNWAY_STATE.md Markdown snapshot generator
+│   ├── state/
+│   │   ├── goose_scale.ts    ← 8 flight states + level calculation
+│   │   └── state_generator.ts ← RUNWAY_STATE.md Markdown snapshot generator
+│   ├── observations/
+│   │   ├── tool.ts           ← MCP tool: emit_observation
+│   │   ├── emission.ts       ← RuntimeResourceObservation builder
+│   │   ├── lifecycle.ts      ← runtime lifecycle events
+│   │   └── action.ts         ← runtime action events
+│   └── tokensource/
+│       ├── types.ts          ← TokenSource interface + registry
+│       ├── integration.ts    ← TokenSource initialization and routing
+│       └── openwork_adapter.ts ← OpenWork telemetry adapter (optional)
 └── scripts/
     └── smoke-test.js         ← dependency verification
 ```
@@ -377,10 +437,10 @@ flightplan-mcp/
 
 - **Two binaries:** `flightplan-mcp` (MCP server / init) and `flightplan` (status CLI). Different names, different jobs.
 - **Single DB file:** `~/.flightplan/flightplan.db` holds everything. No separate config file.
-- **Mechanism A:** Agent self-reports tokens at session end. No continuous per-turn ticks — that costs too many tokens to track tokens.
+- **Agent self-report as primary, telemetry as optional:** The normal flow is agent self-report at session end. Optional TokenSource adapters (e.g. OpenWork) can provide real telemetry when available, but Flightplan works without them.
 - **Provider-agnostic:** No hardcoded plan limits. User sets their own session baseline at init. Providers don't publish hard limits anyway — community estimates go stale silently.
 - **ESM throughout:** `"type": "module"` in package.json. All imports use `.js` extensions per TypeScript ESM requirements.
-- **Local-first:** One SQLite file. No cloud, no auth, no telemetry.
+- **Local-first core, optional network:** The core Flightplan system is local-only. TokenSource adapters may make network requests to external telemetry sources when configured and enabled.
 
 ---
 
@@ -425,7 +485,6 @@ All `active_session` columns above, plus: `ended_at`, `duration_minutes`, `token
 ## What Flightplan Stores
 
 Everything lives in one SQLite file: `~/.flightplan/flightplan.db`.
-Nothing leaves your machine.
 
 **What is stored:**
 - Provider name and key (e.g. `Claude Code` / `claude_code`) — set by you at init
@@ -437,8 +496,7 @@ Nothing leaves your machine.
 
 **What is never stored:**
 - Conversation content — not a single word of what you or the agent said
-- Code, diffs, filenames, or any project content
-- API keys, credentials, or any authentication data
+- API keys, credentials, or any authentication data (except when TokenSource adapters are configured — see Privacy section)
 - Anything from your editor, terminal, or filesystem
 
 **Notes field:** The optional `notes` parameter in `record_session()` is
@@ -523,22 +581,31 @@ variable is available for redirecting the DB path in custom test scenarios.
 Flightplan is local-first by design. Detailed privacy boundary:
 [docs/FLIGHTPLAN-PRIVACY-BOUNDARY.md](docs/FLIGHTPLAN-PRIVACY-BOUNDARY.md)
 
-- **No telemetry.** Zero network requests, no cloud sync, no analytics.
+- **No telemetry.** No cloud sync, no analytics, no crash reporting.
 - **No conversation content.** Prompts, code, and agent responses are never stored.
 - **Local DB only.** `~/.flightplan/flightplan.db` stays on your machine.
 - **Notes excluded from receipts.** The optional `notes` field is agent-controlled
   freeform text stored in the DB but excluded from receipts by default.
 - **No secrets stored.** Project IDs and work tags are metadata, not content.
+- **Optional network.** TokenSource adapters (e.g. OpenWork) may make network
+  requests to external telemetry sources when configured. They are not enabled
+  by default and are not required for Flightplan to function.
 
 ---
 
-### Phase 1 — Static Baseline ✅ *Current*
+### Phase 1 — Static Baseline ✅ *Complete*
 User-set baseline. Agent self-reports. Goose Scale levels. Status CLI. MCP tools.
 
 **FP-1 (v2 schema):** Librarian work-order tagging. `plan_id`, `work_order_id`, `work_session_id`, `agent`, and `outcome` fields on sessions. Auto-migration from v1 → v2.
 
-### Phase 2a — Dead Reckoning Analytics ✅ *Shipped in v0.2.0*
+### Phase 2a — Dead Reckoning Analytics ✅ *Complete (shipped in v0.2.0)*
 Historical token estimation (p50/p80/p95 from `usage_snapshots`). Auto-calibrating baseline after 5+ eligible sessions. Confidence scoring. Calibration eligibility filtering. Anomaly detection. Gate policy (proceed / proceed_with_checkpoint / split / land_first / refuse). Session receipt generation. Landing assessment with handoff templates.
+
+### Runtime Observation Layer ✅ *Implemented*
+Structured `RuntimeResourceObservation` builder with variance classification (NOMINAL / ELEVATED / AT_RISK / EXCEEDED). The `emit_observation` MCP tool provides a clean sensor interface for governance systems. Runtime lifecycle events and action events are modeled. Flightplan produces observations; consumers (e.g. Librarian) decide what to do with them.
+
+### TokenSource Abstraction ✅ *Implemented (not yet wired to live runway)*
+Formal `TokenSource` interface with registry, scope filtering, and health checks. OpenWork adapter implemented. Architecture for real telemetry exists, but the normal MCP startup path does not yet initialize TokenSource or feed live usage into runway calculations.
 
 ### Phase 2b — Velocity Fields *(next)*
 `burn_rate_per_hour` and `time_remaining_minutes` from active-work vs wall-clock duration. Project-specific velocity profiles via `project_id`. Provider/token-count fallback mode for agents without live token totals. Confidence intervals on estimates.

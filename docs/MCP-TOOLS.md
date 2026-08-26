@@ -1,7 +1,12 @@
 # Flightplan MCP Tools
 
-Flightplan registers five MCP tools. Each tool is documented below with
+Flightplan registers six MCP tools. Each tool is documented below with
 its purpose, input schema, response shape, error handling, and privacy notes.
+
+The first five tools are the core runway management surface. The sixth
+(`emit_observation`) is the runtime observation interface for governance
+systems. Flightplan produces observations; it does not persist evidence
+or make authority decisions — that is the consumer's responsibility.
 
 ---
 
@@ -388,7 +393,120 @@ No. Read-only (reads session state from `active_session`).
 
 ---
 
-## Error Response Format
+## Tool: `emit_observation`
+
+### Purpose
+
+Emit a structured RuntimeResourceObservation — a snapshot of current token
+consumption, Dead Reckoning estimate, and variance classification. This is
+Flightplan's sensor output for governance systems (e.g. the Librarian) that
+consume evidence and make authority decisions.
+
+**Critical boundary:** Flightplan produces the observation. It does not
+persist it as evidence (that is the consumer's job) and does not make
+policy decisions (that is the gate system's job). The observation is a
+read-only sensor reading, not a governance artifact.
+
+### Input Schema
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `session_id` | string | no | Override session ID. If omitted, reads from active session. |
+| `work_packet_id` | string | no | Work Packet ID if this session is governed. Omit for ungoverned sessions. |
+| `work_order_id` | string | no | Librarian Work Order ID if present. Omit if not applicable. |
+| `model` | string | no | Override model for estimate lookup. |
+| `provider` | string | no | Override provider for estimate lookup. |
+| `project` | string | no | Override project for estimate lookup. |
+
+### Example Request
+
+```json
+{
+  "work_packet_id": "WP-001",
+  "work_order_id": "A1"
+}
+```
+
+### Example Response
+
+```json
+{
+  "observation_id": "OBS-m1abc2-def123",
+  "observation_type": "runtime_resource",
+  "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "timestamp": "2026-08-25T12:00:00.000Z",
+  "model_identity": {
+    "provider": "OpenWork",
+    "model": "claude-sonnet-4-6"
+  },
+  "consumed": {
+    "tokens_observed": 12000,
+    "goose_level": "CRUISING",
+    "elapsed_minutes": 15.2
+  },
+  "estimate": {
+    "estimator_id": "token-cost-estimator-v1",
+    "confidence": "medium",
+    "percentiles": {
+      "p50": 18000,
+      "p80": 45000,
+      "p95": 85000
+    },
+    "sample_count": 10,
+    "match_scope": "provider_model"
+  },
+  "variance": {
+    "state": "NOMINAL",
+    "pct_of_p50": 66.7,
+    "pct_of_p80": 26.7,
+    "remaining_tokens": 28000
+  },
+  "recommended_action": "Consumption is within expected range. Proceed normally.",
+  "work_packet_id": "WP-001",
+  "work_order_id": "A1"
+}
+```
+
+### Variance Classification
+
+The `variance` block classifies actual consumption against the Dead Reckoning
+estimate. This is **observation, not policy** — it describes what happened,
+not what to do about it.
+
+| State | Condition | Meaning |
+|---|---|---|
+| `NOMINAL` | actual ≤ 75% of p50 | Within expected range |
+| `ELEVATED` | actual > 75% of p50 | Above median, re-evaluate |
+| `AT_RISK` | actual > 90% of p80 | Approaching estimate ceiling |
+| `EXCEEDED` | actual > 100% of p80 | Estimate was wrong or scope expanded |
+
+### Recommended Action
+
+The `recommended_action` field is synthesized from both the variance state
+and the Goose Scale level. It is a human-readable string — agents may
+pattern-match on it but should treat it as advisory, not authoritative.
+
+### Error Response
+
+`emit_observation` always returns a valid observation. If no session is
+active, it returns an observation with `goose_level: "PREFLIGHT"` and
+zero consumed tokens. The estimate fields may be null if insufficient
+historical data exists.
+
+### Mutates DB
+
+No. Read-only (reads session state and historical data to build the
+observation).
+
+### Privacy Notes
+
+- Returns structured metadata only: token counts, Goose level, estimate
+  percentiles, variance classification, and recommended action.
+- Does not return prompts, code, conversation content, or notes.
+- Optional work tags (`work_packet_id`, `work_order_id`) are returned
+  only when provided by the caller — they are not read from the DB.
+- The observation is not persisted by Flightplan. The consumer decides
+  what to do with it.
 
 All MCP tools return errors through the standard MCP error mechanism (the MCP
 SDK's `McpError` or thrown `Error` objects). For tools that support graceful
@@ -416,9 +534,9 @@ Common error codes:
 
 ## Privacy Summary
 
-All five tools follow the Flightplan privacy boundary:
+All six tools follow the Flightplan privacy boundary:
 
-- **No telemetry**: zero network requests, no cloud sync
+- **No telemetry**: no cloud sync, no analytics, no crash reporting
 - **No conversation content**: prompts, code, and agent responses are never stored
 - **Local-only DB**: `~/.flightplan/flightplan.db`
 - **Notes excluded from receipts**: the `notes` field is agent-controlled
@@ -426,3 +544,11 @@ All five tools follow the Flightplan privacy boundary:
   by default
 - **Work tags are metadata**: `project_id`, `plan_id`, `work_order_id`,
   `work_session_id`, and `agent` are user-supplied tags — not content
+- **Observations are not persisted**: `emit_observation` returns a structured
+  sensor reading; Flightplan does not store it. The consumer decides what
+  to do with it.
+
+**TokenSource adapters** (e.g. OpenWork) are optional and not enabled by
+default. When configured, they may make network requests to external
+telemetry endpoints. See [FLIGHTPLAN-PRIVACY-BOUNDARY.md](FLIGHTPLAN-PRIVACY-BOUNDARY.md)
+for details on what data may cross an integration boundary.

@@ -89,6 +89,19 @@ flightplan gate --json \
   --work-type "<current-action>"
 ```
 
+### Observation emission (optional, for governance integration)
+
+If Flightplan is integrated with a governance system, the agent can emit
+a structured observation at periodic check points:
+
+```
+emit_observation(work_packet_id="<wp-id>", work_order_id="<wo-id>")
+```
+
+This returns a RuntimeResourceObservation with token consumption, estimate,
+variance, and recommended action. The governance system consumes this; Flightplan
+does not persist it.
+
 ### Decision interpretation
 
 | Gate Decision | Meaning | Required Action |
@@ -232,6 +245,7 @@ function run_agent_session(work_item, config):
 | Preflight | `session_start(...)` | MCP | If available |
 | Periodic | `flightplan gate --json` | CLI | Yes |
 | Periodic | `get_runway()` | MCP | If available |
+| Periodic | `emit_observation(...)` | MCP | If governance integration |
 | Closeout | `flightplan land --json` | CLI | Yes |
 | Closeout | `record_session(...)` | MCP | If tokens available |
 | Closeout | `flightplan receipt --last --json` | CLI | Yes |
